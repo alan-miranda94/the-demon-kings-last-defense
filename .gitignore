@@ -41,3 +41,8 @@ next-env.d.ts
 
 # LangGraph API
 .langgraph_api
+
+.env
+docker/.env
+.env.local
+*.env
