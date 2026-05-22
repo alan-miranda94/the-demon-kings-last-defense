@@ -15,8 +15,8 @@ import {
     preloadButtonSounds,
 } from "../buttonSounds";
 
-const GAME_WIDTH = 1280;
-const GAME_HEIGHT = 720;
+export const GAME_WIDTH = 1280;
+export const GAME_HEIGHT = 720;
 const HERO_START_X = 150;
 const HERO_GROUND_Y = 500;
 const INVOCATION_CARD_LIMIT = 5;

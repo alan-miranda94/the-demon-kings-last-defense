@@ -15,6 +15,7 @@ import {
     playButtonHoverSound,
     preloadButtonSounds,
 } from "../buttonSounds";
+import { GAME_HEIGHT, GAME_WIDTH } from "./Game";
 
 type GalleryInvocation = {
     id: string;
@@ -66,12 +67,15 @@ export class GalleryScene extends Phaser.Scene {
     private currentPage = 0;
     private listBounds = new Phaser.Geom.Rectangle(0, 0, 1, 1);
     private hasQueuedArtworkLoad = false;
+    private gameLoadingContainer?: Phaser.GameObjects.Container;
 
     constructor() {
         super("GalleryScene");
     }
 
     preload() {
+        this.createGameLoadingScreen();
+
         this.load.image("gallery_background", "assets/initial_background.png");
         this.load.image("gallery_button", "assets/avoid_button.png");
         this.load.image("gallery_logo", "assets/game_logo.png");
@@ -147,6 +151,81 @@ export class GalleryScene extends Phaser.Scene {
 
         void this.loadInvocations();
         EventBus.emit("current-scene-ready", this);
+    }
+
+    private createGameLoadingScreen() {
+        const viewWidth = this.scale.width || GAME_WIDTH;
+        const viewHeight = this.scale.height || GAME_HEIGHT;
+        const centerX = viewWidth / 2;
+        const centerY = viewHeight / 2;
+        const barWidth = Math.min(viewWidth * 0.62, 520);
+        const barHeight = 18;
+        const loadingContainer = this.add.container(0, 0).setDepth(1000);
+        this.gameLoadingContainer = loadingContainer;
+        const overlay = this.add.rectangle(
+            centerX,
+            centerY,
+            viewWidth,
+            viewHeight,
+            0x070510,
+            1,
+        );
+        const title = this.add
+            .text(centerX, centerY - 106, "CARREGANDO DEFESAS...", {
+                fontFamily: "monospace",
+                fontSize: "26px",
+                color: "#f4e7a1",
+                align: "center",
+                stroke: "#120711",
+                strokeThickness: 5,
+            })
+            .setOrigin(0.5);
+        const frame = this.add
+            .rectangle(centerX, centerY, barWidth, barHeight, 0x120711, 0.92)
+            .setStrokeStyle(2, 0xf3b45a, 0.95);
+        const fill = this.add
+            .rectangle(
+                centerX - barWidth / 2 + 4,
+                centerY,
+                1,
+                barHeight - 8,
+                0x8f35d5,
+                0.96,
+            )
+            .setOrigin(0, 0.5);
+        const percentText = this.add
+            .text(centerX, centerY + 42, "0%", {
+                fontFamily: "monospace",
+                fontSize: "18px",
+                color: "#ffffff",
+                align: "center",
+                stroke: "#120711",
+                strokeThickness: 4,
+            })
+            .setOrigin(0.5);
+
+        loadingContainer.add([overlay, title, frame, fill, percentText]);
+
+        const updateProgress = (progress: number) => {
+            fill.width = Math.max(1, (barWidth - 8) * progress);
+            percentText.setText(`${Math.round(progress * 100)}%`);
+        };
+        let didCleanup = false;
+        const cleanupLoadingScreen = () => {
+            if (didCleanup) return;
+
+            didCleanup = true;
+            this.load.off(Phaser.Loader.Events.PROGRESS, updateProgress);
+            loadingContainer.destroy(true);
+
+            if (this.gameLoadingContainer === loadingContainer) {
+                this.gameLoadingContainer = undefined;
+            }
+        };
+
+        this.load.on(Phaser.Loader.Events.PROGRESS, updateProgress);
+        this.load.once(Phaser.Loader.Events.COMPLETE, cleanupLoadingScreen);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupLoadingScreen);
     }
 
     private async loadInvocations() {
@@ -225,7 +304,11 @@ export class GalleryScene extends Phaser.Scene {
         this.updatePaginationText();
     }
 
-    private createInvocationCard(item: GalleryInvocation, x: number, y: number) {
+    private createInvocationCard(
+        item: GalleryInvocation,
+        x: number,
+        y: number,
+    ) {
         const invocation = item.invocation.invocacao;
         const name = invocation?.nome ?? "Invocacao sem nome";
         const type = this.formatInvocationType(invocation?.tipo);
@@ -246,15 +329,20 @@ export class GalleryScene extends Phaser.Scene {
             })
             .setOrigin(0.5);
         const title = this.add
-            .text(CARD_WIDTH / 2, 86, this.shortenText(name.toUpperCase(), 24), {
-                fontFamily: "AriW9500, monospace",
-                fontSize: "10px",
-                color: "#ffffff",
-                align: "center",
-                stroke: "#100610",
-                strokeThickness: 2,
-                wordWrap: { width: CARD_WIDTH - 18 },
-            })
+            .text(
+                CARD_WIDTH / 2,
+                86,
+                this.shortenText(name.toUpperCase(), 24),
+                {
+                    fontFamily: "AriW9500, monospace",
+                    fontSize: "10px",
+                    color: "#ffffff",
+                    align: "center",
+                    stroke: "#100610",
+                    strokeThickness: 2,
+                    wordWrap: { width: CARD_WIDTH - 18 },
+                },
+            )
             .setOrigin(0.5, 0);
         const cost = this.add
             .text(CARD_WIDTH / 2, CARD_HEIGHT - 18, String(mana), {
@@ -346,7 +434,13 @@ export class GalleryScene extends Phaser.Scene {
         ]);
 
         if (invocation?.imageUrl) {
-            this.loadCardArtwork(card, symbol, title, item.id, invocation.imageUrl);
+            this.loadCardArtwork(
+                card,
+                symbol,
+                title,
+                item.id,
+                invocation.imageUrl,
+            );
         }
 
         return card;
@@ -354,7 +448,9 @@ export class GalleryScene extends Phaser.Scene {
 
     private async toggleFavorite(item: GalleryInvocation) {
         const nextFavorite = !item.isFavorite;
-        this.setStatus(nextFavorite ? "Favoritando invocacao..." : "Removendo favorito...");
+        this.setStatus(
+            nextFavorite ? "Favoritando invocacao..." : "Removendo favorito...",
+        );
 
         try {
             const response = await fetch("/api/invocations", {
@@ -396,15 +492,20 @@ export class GalleryScene extends Phaser.Scene {
         this.setStatus("Apagando invocacao...");
 
         try {
-            const response = await fetch(`/api/invocations?id=${encodeURIComponent(id)}`, {
-                method: "DELETE",
-            });
+            const response = await fetch(
+                `/api/invocations?id=${encodeURIComponent(id)}`,
+                {
+                    method: "DELETE",
+                },
+            );
 
             if (!response.ok) {
                 throw new Error("Nao foi possivel apagar esta invocacao.");
             }
 
-            this.invocations = this.invocations.filter((item) => item.id !== id);
+            this.invocations = this.invocations.filter(
+                (item) => item.id !== id,
+            );
             removeCachedInvocation(id);
             this.currentPage = Math.max(
                 0,
@@ -420,7 +521,11 @@ export class GalleryScene extends Phaser.Scene {
         }
     }
 
-    private createNavButton(label: string, xOffset: number, onClick: () => void) {
+    private createNavButton(
+        label: string,
+        xOffset: number,
+        onClick: () => void,
+    ) {
         const button = this.createButton(label, onClick);
 
         this.navButtons.push(button);
@@ -491,7 +596,9 @@ export class GalleryScene extends Phaser.Scene {
         this.titleText.setPosition(centerX, panelCenterY - panelHeight * 0.38);
 
         this.listBounds.setTo(
-            centerX - (CARD_COLUMNS * CARD_WIDTH + (CARD_COLUMNS - 1) * CARD_GAP_X) / 2,
+            centerX -
+                (CARD_COLUMNS * CARD_WIDTH + (CARD_COLUMNS - 1) * CARD_GAP_X) /
+                    2,
             panelCenterY - panelHeight * 0.28,
             CARD_COLUMNS * CARD_WIDTH + (CARD_COLUMNS - 1) * CARD_GAP_X,
             2 * CARD_HEIGHT + CARD_GAP_Y,
@@ -703,3 +810,4 @@ export class GalleryScene extends Phaser.Scene {
         document.head.appendChild(style);
     }
 }
+

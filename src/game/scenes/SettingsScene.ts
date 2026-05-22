@@ -18,6 +18,7 @@ import {
     playButtonHoverSound,
     preloadButtonSounds,
 } from "../buttonSounds";
+import { GAME_HEIGHT, GAME_WIDTH } from "./Game";
 
 type SettingsButton = {
     background: Phaser.GameObjects.Image;
@@ -59,6 +60,7 @@ export class SettingsScene extends Phaser.Scene {
     private distanceValueBox!: Phaser.GameObjects.Rectangle;
     private distanceValueText!: Phaser.GameObjects.Text;
     private statusText!: Phaser.GameObjects.Text;
+    private gameLoadingContainer?: Phaser.GameObjects.Container;
     private settings: GameSettings = getGameSettings();
 
     constructor() {
@@ -66,10 +68,15 @@ export class SettingsScene extends Phaser.Scene {
     }
 
     preload() {
+        this.createGameLoadingScreen();
+
         this.load.image("settings_background", "assets/initial_background.png");
         this.load.image("settings_panel", "assets/painel.png");
         this.load.image("settings_button", "assets/avoid_button.png");
-        this.load.image("settings_square_button", "assets/avoide_square_button.png");
+        this.load.image(
+            "settings_square_button",
+            "assets/avoide_square_button.png",
+        );
         this.load.image("settings_volume_track", "assets/vol_avoid_bar.png");
         this.load.image("settings_volume_fill", "assets/vol_bar_full.png");
         preloadBackgroundMusic(this);
@@ -77,6 +84,8 @@ export class SettingsScene extends Phaser.Scene {
     }
 
     create() {
+        this.gameLoadingContainer?.destroy(true);
+        this.gameLoadingContainer = undefined;
         this.registerSettingsFont();
         this.settings = getGameSettings();
         playBackgroundMusic(this);
@@ -86,9 +95,15 @@ export class SettingsScene extends Phaser.Scene {
         this.frameGraphics = this.add.graphics().setDepth(3);
 
         this.titleText = this.createText("CONFIGURACOES", 42, "#f7c85a", 3);
-        this.audioSectionImage = this.add.image(0, 0, "settings_button").setDepth(4);
-        this.aiSectionImage = this.add.image(0, 0, "settings_button").setDepth(4);
-        this.gameSectionImage = this.add.image(0, 0, "settings_button").setDepth(4);
+        this.audioSectionImage = this.add
+            .image(0, 0, "settings_button")
+            .setDepth(4);
+        this.aiSectionImage = this.add
+            .image(0, 0, "settings_button")
+            .setDepth(4);
+        this.gameSectionImage = this.add
+            .image(0, 0, "settings_button")
+            .setDepth(4);
         this.audioSectionText = this.createSectionText("AUDIO");
         this.aiSectionText = this.createSectionText("IA");
         this.gameSectionText = this.createSectionText("JOGO");
@@ -120,18 +135,30 @@ export class SettingsScene extends Phaser.Scene {
             this.settings.generateAudio = !this.settings.generateAudio;
             this.saveAndRender();
         });
-        this.volumeDownButton = this.createButton("settings_square_button", () => {
-            this.adjustVolume(-VOLUME_STEP);
-        });
-        this.volumeUpButton = this.createButton("settings_square_button", () => {
-            this.adjustVolume(VOLUME_STEP);
-        });
-        this.distanceDownButton = this.createButton("settings_square_button", () => {
-            this.adjustDistance(-DISTANCE_STEP);
-        });
-        this.distanceUpButton = this.createButton("settings_square_button", () => {
-            this.adjustDistance(DISTANCE_STEP);
-        });
+        this.volumeDownButton = this.createButton(
+            "settings_square_button",
+            () => {
+                this.adjustVolume(-VOLUME_STEP);
+            },
+        );
+        this.volumeUpButton = this.createButton(
+            "settings_square_button",
+            () => {
+                this.adjustVolume(VOLUME_STEP);
+            },
+        );
+        this.distanceDownButton = this.createButton(
+            "settings_square_button",
+            () => {
+                this.adjustDistance(-DISTANCE_STEP);
+            },
+        );
+        this.distanceUpButton = this.createButton(
+            "settings_square_button",
+            () => {
+                this.adjustDistance(DISTANCE_STEP);
+            },
+        );
         this.backButton = this.createButton("settings_button", () => {
             this.scene.start("InitialScene");
         });
@@ -160,6 +187,81 @@ export class SettingsScene extends Phaser.Scene {
         EventBus.emit("current-scene-ready", this);
     }
 
+    private createGameLoadingScreen() {
+        const viewWidth = this.scale.width || GAME_WIDTH;
+        const viewHeight = this.scale.height || GAME_HEIGHT;
+        const centerX = viewWidth / 2;
+        const centerY = viewHeight / 2;
+        const barWidth = Math.min(viewWidth * 0.62, 520);
+        const barHeight = 18;
+        const loadingContainer = this.add.container(0, 0).setDepth(1000);
+        this.gameLoadingContainer = loadingContainer;
+        const overlay = this.add.rectangle(
+            centerX,
+            centerY,
+            viewWidth,
+            viewHeight,
+            0x070510,
+            1,
+        );
+        const title = this.add
+            .text(centerX, centerY - 106, "CARREGANDO DEFESAS...", {
+                fontFamily: "monospace",
+                fontSize: "26px",
+                color: "#f4e7a1",
+                align: "center",
+                stroke: "#120711",
+                strokeThickness: 5,
+            })
+            .setOrigin(0.5);
+        const frame = this.add
+            .rectangle(centerX, centerY, barWidth, barHeight, 0x120711, 0.92)
+            .setStrokeStyle(2, 0xf3b45a, 0.95);
+        const fill = this.add
+            .rectangle(
+                centerX - barWidth / 2 + 4,
+                centerY,
+                1,
+                barHeight - 8,
+                0x8f35d5,
+                0.96,
+            )
+            .setOrigin(0, 0.5);
+        const percentText = this.add
+            .text(centerX, centerY + 42, "0%", {
+                fontFamily: "monospace",
+                fontSize: "18px",
+                color: "#ffffff",
+                align: "center",
+                stroke: "#120711",
+                strokeThickness: 4,
+            })
+            .setOrigin(0.5);
+
+        loadingContainer.add([overlay, title, frame, fill, percentText]);
+
+        const updateProgress = (progress: number) => {
+            fill.width = Math.max(1, (barWidth - 8) * progress);
+            percentText.setText(`${Math.round(progress * 100)}%`);
+        };
+        let didCleanup = false;
+        const cleanupLoadingScreen = () => {
+            if (didCleanup) return;
+
+            didCleanup = true;
+            this.load.off(Phaser.Loader.Events.PROGRESS, updateProgress);
+            loadingContainer.destroy(true);
+
+            if (this.gameLoadingContainer === loadingContainer) {
+                this.gameLoadingContainer = undefined;
+            }
+        };
+
+        this.load.on(Phaser.Loader.Events.PROGRESS, updateProgress);
+        this.load.once(Phaser.Loader.Events.COMPLETE, cleanupLoadingScreen);
+        this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupLoadingScreen);
+    }
+
     private createText(
         value: string,
         fontSize: number,
@@ -183,7 +285,10 @@ export class SettingsScene extends Phaser.Scene {
         return this.createText(value, 20, "#f7c85a", 3);
     }
 
-    private createButton(textureKey: string, onClick: () => void): SettingsButton {
+    private createButton(
+        textureKey: string,
+        onClick: () => void,
+    ): SettingsButton {
         const background = this.add
             .image(0, 0, textureKey)
             .setInteractive({ useHandCursor: true })
@@ -209,7 +314,9 @@ export class SettingsScene extends Phaser.Scene {
             label,
             setPosition: (x, y, width, height) => {
                 background.setPosition(x, y).setDisplaySize(width, height);
-                label.setPosition(x, y).setFontSize(Math.max(16, height * 0.44));
+                label
+                    .setPosition(x, y)
+                    .setFontSize(Math.max(16, height * 0.44));
             },
         };
     }
@@ -300,19 +407,19 @@ export class SettingsScene extends Phaser.Scene {
         const footerY = panelTop + panelHeight * 0.88;
         const footerButtonWidth = Math.min(265, panelWidth * 0.31);
 
-        this.background
+        this.background.setPosition(centerX, centerY).setScale(backgroundScale);
+        this.panel
             .setPosition(centerX, centerY)
-            .setScale(backgroundScale);
-        this.panel.setPosition(centerX, centerY).setDisplaySize(panelWidth, panelHeight);
+            .setDisplaySize(panelWidth, panelHeight);
         this.drawPanel(panelLeft, panelTop, panelWidth, panelHeight, [
             audioY,
             aiY,
             gameY,
         ]);
 
-        this.titleText.setPosition(centerX, titleY).setFontSize(
-            Math.max(30, panelWidth * 0.047),
-        );
+        this.titleText
+            .setPosition(centerX, titleY)
+            .setFontSize(Math.max(30, panelWidth * 0.047));
         this.audioSectionText
             .setPosition(centerX, audioY)
             .setFontSize(Math.max(16, panelWidth * 0.022));
@@ -323,9 +430,27 @@ export class SettingsScene extends Phaser.Scene {
             .setPosition(centerX, gameY)
             .setFontSize(Math.max(16, panelWidth * 0.022));
 
-        this.layoutSectionTitle(this.audioSectionImage, centerX, audioY, sectionWidth, sectionHeight);
-        this.layoutSectionTitle(this.aiSectionImage, centerX, aiY, sectionWidth, sectionHeight);
-        this.layoutSectionTitle(this.gameSectionImage, centerX, gameY, sectionWidth, sectionHeight);
+        this.layoutSectionTitle(
+            this.audioSectionImage,
+            centerX,
+            audioY,
+            sectionWidth,
+            sectionHeight,
+        );
+        this.layoutSectionTitle(
+            this.aiSectionImage,
+            centerX,
+            aiY,
+            sectionWidth,
+            sectionHeight,
+        );
+        this.layoutSectionTitle(
+            this.gameSectionImage,
+            centerX,
+            gameY,
+            sectionWidth,
+            sectionHeight,
+        );
 
         this.musicLabelText.setPosition(labelX, musicY).setOrigin(0, 0.5);
         this.volumeLabelText.setPosition(labelX, volumeY).setOrigin(0, 0.5);
@@ -346,7 +471,12 @@ export class SettingsScene extends Phaser.Scene {
         });
 
         this.musicButton.setPosition(valueX, musicY, buttonWidth, buttonHeight);
-        this.providerButton.setPosition(valueX, providerY, buttonWidth, buttonHeight);
+        this.providerButton.setPosition(
+            valueX,
+            providerY,
+            buttonWidth,
+            buttonHeight,
+        );
         this.generateAudioButton.setPosition(
             valueX,
             generateAudioY,
@@ -368,7 +498,9 @@ export class SettingsScene extends Phaser.Scene {
             smallButtonSize,
             smallButtonSize * 0.8,
         );
-        this.volumeTrack.setPosition(sliderX, volumeY).setDisplaySize(sliderWidth, 18);
+        this.volumeTrack
+            .setPosition(sliderX, volumeY)
+            .setDisplaySize(sliderWidth, 18);
         this.volumeFill
             .setPosition(sliderX - sliderWidth / 2, volumeY)
             .setDisplaySize(1, 14);
@@ -397,12 +529,7 @@ export class SettingsScene extends Phaser.Scene {
             smallButtonSize,
         );
 
-        this.backButton.setPosition(
-            centerX,
-            footerY,
-            footerButtonWidth,
-            54,
-        );
+        this.backButton.setPosition(centerX, footerY, footerButtonWidth, 54);
         this.statusText
             .setPosition(centerX, footerY - 42)
             .setFontSize(Math.max(13, panelWidth * 0.017));
@@ -464,10 +591,14 @@ export class SettingsScene extends Phaser.Scene {
             0,
             1,
         );
-        const trackLeft = this.volumeTrack.x - this.volumeTrack.displayWidth / 2;
+        const trackLeft =
+            this.volumeTrack.x - this.volumeTrack.displayWidth / 2;
         const fillWidth = Math.max(1, this.volumeTrack.displayWidth * percent);
 
-        this.volumeFill.setDisplaySize(fillWidth, this.volumeFill.displayHeight);
+        this.volumeFill.setDisplaySize(
+            fillWidth,
+            this.volumeFill.displayHeight,
+        );
     }
 
     private registerSettingsFont() {
@@ -490,3 +621,4 @@ export class SettingsScene extends Phaser.Scene {
         document.head.appendChild(style);
     }
 }
+
