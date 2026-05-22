@@ -100,6 +100,7 @@ Imagem:
 - Sempre retorne imageUrl como null.
 - Nao retorne imagePrompt.
 - descricaoVisual deve descrever aparencia, silhueta, material/textura, cores principais, efeitos magicos e detalhes que tornem o sprite reconhecivel.
+- descricaoVisual deve ser segura para geracao de imagem: nao descreva sangue, gore, ferimentos explicitos, mutilacao, corpos, orgaos, crueldade realista ou violencia grafica. Transforme ideias violentas em fantasia estilizada, magica, nao grafica e adequada para sprite de jogo.
 - Nao coloque em descricaoVisual instrucoes de estilo genericas como pixel art, fundo transparente, sem texto, sem UI ou tamanho da imagem. Essas instrucoes serao adicionadas depois pelo gerador de imagem.
 
 Audio:
@@ -119,6 +120,8 @@ export const buildObstacleInvocationImagePrompt = (
     visualDescription: string,
 ) =>
     `5x5 sprite sheet grid for a 2D 16-bit pixel art side-scroller platform game obstacle asset of ${invocationName}. ${visualDescription}.
+
+This must be a PG-rated fantasy game sprite sheet. Keep all danger symbolic, theatrical, and arcade-like, using magic effects, dust, sparks, smoke, and stylized motion instead of realistic harm details.
 
 Create exactly twenty-five equal square frames arranged in 5 columns and 5 rows. Each frame must contain the same obstacle, with a consistent design, proportions, color palette, outline style, and lighting across the entire sheet.
 

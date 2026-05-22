@@ -1,21 +1,38 @@
+import { createMemoryService } from "./../services/memoryService";
 import { OpenRouterService } from "../services/openrouterService";
 import { config } from "../config";
-import { buildChatGraph } from "./graph";
+import { buildDemonKingSpeechGraph, buildHeroChatGraph } from "./graph";
 
-export async function buildGraph() {
+type GraphBundle = Awaited<ReturnType<typeof createGraphBundle>>;
+
+let graphBundlePromise: Promise<GraphBundle> | undefined;
+
+async function createGraphBundle() {
     const llmClient = new OpenRouterService(config);
-
-    const graph = buildChatGraph(llmClient);
+    const memoryService = await createMemoryService();
 
     return {
-        graph,
-        memoryService: {
-            store: {
-                search: (arg1: any, arg2: any) => Promise.resolve([]),
-            },
-        },
+        graph: buildDemonKingSpeechGraph(llmClient, memoryService),
+        heroChatGraph: buildHeroChatGraph(llmClient, memoryService),
     };
 }
 
-export const graph = async () => buildGraph();
+export async function buildGraph() {
+    graphBundlePromise ??= createGraphBundle();
+
+    return graphBundlePromise;
+}
+
+export const graph = async () => {
+    const bundle = await buildGraph();
+
+    return bundle.graph;
+};
+
+export const heroChatGraph = async () => {
+    const bundle = await buildGraph();
+
+    return bundle.heroChatGraph;
+};
+
 export default graph;

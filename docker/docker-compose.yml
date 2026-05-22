@@ -22,17 +22,19 @@ services:
       timeout: 5s
       retries: 5
 
-  diffusion-api:
-    build: .
-    container_name: diffusion-api
+  openedai-speech:
+    image: ghcr.io/matatonic/openedai-speech
+    container_name: openedai-speech
     ports:
-      - "8091:8091"
+      - "9080:8000"
+    env_file:
+      - .env
     volumes:
-      - ./output:/app/output
-      - ./models:/app/models
-      - ./cache:/root/.cache/huggingface
-    environment:
-      - MODEL_ID=/app/models/SD_PixelArt_SpriteSheet_Generator
+      - ./voices:/app/voices
+      - ./config:/app/config
+    restart: unless-stopped
+
+    # Use esta parte se você tiver GPU NVIDIA
     deploy:
       resources:
         reservations:
@@ -40,7 +42,25 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    restart: unless-stopped
+  # diffusion-api:
+  #   build: .
+  #   container_name: diffusion-api
+  #   ports:
+  #     - "8091:8091"
+  #   volumes:
+  #     - ./output:/app/output
+  #     - ./models:/app/models
+  #     - ./cache:/root/.cache/huggingface
+  #   environment:
+  #     - MODEL_ID=/app/models/SD_PixelArt_SpriteSheet_Generator
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+  #   restart: unless-stopped
 
   # SE TIVER UM BOM PC COM MUITA VRAM DA PRA USAR
   # comfy-api:

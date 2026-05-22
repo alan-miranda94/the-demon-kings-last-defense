@@ -72,7 +72,7 @@
                     "efeitoStatus": "atordoamento_codigo"
                 },
                 "categoria": "perigo_magico",
-                "tamanho": "medio",
+                "tamanho": "grande",
                 "vida": 450,
                 "atraso": 2.0,
                 "custoMana": 65,

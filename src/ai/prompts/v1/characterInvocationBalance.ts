@@ -105,6 +105,7 @@ Imagem:
 - Sempre retorne imageUrl como null.
 - Nao retorne imagePrompt.
 - descricaoVisual deve descrever aparencia, silhueta, roupa/armadura, arma ou foco magico, cores principais, efeitos magicos, postura de combate, direcao visual e detalhes que tornem o sprite reconhecivel.
+- descricaoVisual deve ser segura para geracao de imagem: nao descreva sangue, gore, ferimentos explicitos, mutilacao, corpos, orgaos, crueldade realista ou violencia grafica. Transforme ideias violentas em fantasia estilizada, magica, nao grafica e adequada para sprite de jogo.
 - Nao coloque em descricaoVisual instrucoes de estilo genericas como pixel art, fundo transparente, sem texto, sem UI ou tamanho da imagem. Essas instrucoes serao adicionadas depois pelo gerador de imagem.
 
 Audio:
@@ -129,19 +130,21 @@ export const buildCharacterInvocationImagePrompt = (
 ) =>
     `5x5 sprite sheet grid for a 2D 16-bit pixel art dark fantasy side-scroller summoned character of ${invocationName}. ${visualDescription}.
 
+This must be a PG-rated fantasy game sprite sheet. Keep all conflict symbolic, theatrical, and arcade-like, using magic effects, smoke puffs, sparks, impact stars, shadow energy, and stylized motion instead of realistic harm details.
+
 Create exactly twenty-five equal square frames arranged in 5 columns and 5 rows. Each frame must contain the same full-body character, with a consistent design, proportions, color palette, outline style, and lighting across the entire sheet.
 
 Frames 1 through 5 should depict the character being summoned from demonic smoke or shadow energy, starting as a faint silhouette and ending fully visible.
 
 Frames 6 through 10 should depict the character running from the right side of the screen toward the left side in a readable run cycle, with stronger forward lean, wider stride, and more energetic motion than a walk.
 
-Frames 11 through 20 should depict an attack, spell cast, slash, lunge, bite, or combat action aimed toward the left side of the screen, with clear wind-up, impact, and recovery poses.
+Frames 11 through 20 should depict a stylized action flourish, spell cast, defensive swipe, dramatic lunge, or harmless arcade-style contact pose aimed toward the left side of the screen, with clear wind-up, magical impact effects, and recovery poses.
 
-Frames 21 through 25 should depict the character dying, dissolving, collapsing, or vanishing back into demonic smoke.
+Frames 21 through 25 should depict the character being defeated in a non-graphic arcade style: staggering, fading, dissolving, poofing, or vanishing back into demonic smoke.
 
 Each of the 25 frames must be a distinct animation pose or timing step. Do not duplicate poses between frames. The sequence must read from left to right, top to bottom.
 
-The character must be shown full body in every frame, from head to feet, with the entire silhouette visible and no cropped head, feet, weapon, limbs, wings, tail, cape, horns, or effects. The character must always face left in every single frame, including summon, run, attack, hit reaction, and death frames. Never show the character facing right, front-facing, back-facing, or mirrored inconsistently. The face, chest, weapon aim, feet direction, attack motion, and body orientation must all point toward the left side of the screen, toward the approaching hero. The character must stay grounded like a side-scroller enemy or ally sprite. The animation should make it clear that this summoned character enters from the right edge of the screen, runs left until reaching the hero, attacks, takes hits from the hero, and then dies.
+The character must be shown full body in every frame, from head to feet, with the entire silhouette visible and no cropped head, feet, weapon, limbs, wings, tail, cape, horns, or effects. The character must always face left in every single frame, including summon, run, action, recoil, and vanish frames. Never show the character facing right, front-facing, back-facing, or mirrored inconsistently. The face, chest, weapon aim, feet direction, action motion, and body orientation must all point toward the left side of the screen, toward an off-screen target. The character must stay grounded like a side-scroller enemy or ally sprite. The animation should make it clear that this summoned character enters from the right edge of the screen, runs left, performs a stylized game action, reacts in a cartoon-like way, and then disappears.
 
 Style requirements:
 classic 16-bit dark fantasy pixel art, chunky pixels, clean pixel clusters, dark outline, readable silhouette, purple demonic rim light, dramatic shading, game-ready sprite sheet.

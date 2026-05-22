@@ -7,7 +7,7 @@ import {
 import { ChatGoogle } from "@langchain/google";
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage } from "@langchain/core/messages";
-import sharp from "sharp";
+import { Jimp, JimpMime } from "jimp";
 import { buildModelSheetTemplatePrompt } from "../prompts/v1/modelSheet";
 
 export type ImageGenerationResult =
@@ -49,6 +49,57 @@ type GoogleImageAspectRatio =
     | "21:9";
 type ImageGenerationInput = string | HumanMessage[];
 
+const IMAGE_SAFETY_SUFFIX = `
+
+Safety requirements for image generation:
+- PG-rated fantasy game asset only.
+- Keep all danger symbolic, theatrical, and arcade-like.
+- Replace intense harm details with stylized fantasy motion, harmless magic effects, smoke, sparks, dust, impact stars, or a simple poof/fade effect.`;
+
+const UNSAFE_IMAGE_PROMPT_REPLACEMENTS: Array<[RegExp, string]> = [
+    [/\bblood\b/gi, "red magical glow"],
+    [/\bbloody\b/gi, "red glowing"],
+    [/\bgore\b/gi, "stylized shadow magic"],
+    [/\bgory\b/gi, "stylized shadowy"],
+    [/\bwounds?\b/gi, "scuff marks"],
+    [/\binjur(?:y|ies|ed)\b/gi, "cartoon recoil"],
+    [/\bsever(?:ed|ing)?\b/gi, "separated by magic smoke"],
+    [/\bdismember(?:ed|ment|ing)?\b/gi, "disappearing in magic smoke"],
+    [/\bcorpse(?:s)?\b/gi, "faded silhouette"],
+    [/\bdead bod(?:y|ies)\b/gi, "faded silhouette"],
+    [/\borgans?\b/gi, "arcane shapes"],
+    [/\btortur(?:e|ed|ing)\b/gi, "ominous magic"],
+    [/\bbrutal(?:ly)?\b/gi, "dramatic"],
+    [/\bviolent(?:ly|ce)?\b/gi, "stylized arcade"],
+    [/\bkilling?\b/gi, "defeating"],
+    [/\bassassins?\b/gi, "shadow rogues"],
+    [/\bmurder(?:ing|ed)?\b/gi, "defeating"],
+    [/\bslaughter(?:ing|ed)?\b/gi, "overwhelming with magic"],
+    [/\bdeath\b/gi, "vanish"],
+    [/\bdies?\b/gi, "vanishes"],
+    [/\bdying\b/gi, "vanishing"],
+    [/\bdecapitat(?:e|ed|ing|ion)\b/gi, "disappearing in smoke"],
+    [/\bmutilat(?:e|ed|ing|ion)\b/gi, "warped by shadow magic"],
+    [/\bsangue\b/gi, "brilho magico vermelho"],
+    [/\bsangrento(?:s|as|a)?\b/gi, "com brilho magico vermelho"],
+    [/\bgore\b/gi, "magia sombria estilizada"],
+    [/\bferid(?:a|as|o|os)\b/gi, "marcas de desgaste"],
+    [/\bmutila(?:cao|do|da|dos|das|r)\b/gi, "distorcao magica"],
+    [/\bcadaver(?:es)?\b/gi, "silhueta desvanecida"],
+    [/\bcorpos?\b/gi, "silhuetas de fumaca"],
+    [/\borgaos?\b/gi, "formas arcanas"],
+    [/\btortur(?:a|ado|ada|ar)\b/gi, "magia sinistra"],
+    [/\bbrutal(?:mente)?\b/gi, "dramatico"],
+    [/\bviolencia\b/gi, "acao arcade estilizada"],
+    [/\bviolento(?:s|as|a)?\b/gi, "estilizado"],
+    [/\bmatar\b/gi, "derrotar"],
+    [/\bmatando\b/gi, "derrotando"],
+    [/\bassassin(?:o|a|os|as)\b/gi, "ladino sombrio"],
+    [/\bassassin(?:ar|ato|ado|ada)\b/gi, "derrotar"],
+    [/\bmorte\b/gi, "desaparecimento"],
+    [/\bmorr(?:e|er|endo)\b/gi, "desaparecendo"],
+];
+
 export class ImageGenerationService {
     private modelSheetBasePath = path.join(
         process.cwd(),
@@ -68,8 +119,7 @@ export class ImageGenerationService {
     private openAiImageQuality = this.readOpenAiImageQuality();
     private openAiImageSize = this.readOpenAiImageSize();
     private huggingFaceToken =
-        process.env.HF_TOKEN?.trim() ??
-        process.env.HUGGINGFACE_API_KEY?.trim();
+        process.env.HF_TOKEN?.trim() ?? process.env.HUGGINGFACE_API_KEY?.trim();
     private huggingFaceModel =
         process.env.HF_IMAGE_MODEL?.trim() ??
         "black-forest-labs/FLUX.2-klein-4B";
@@ -83,15 +133,27 @@ export class ImageGenerationService {
     }
 
     async generateImage(prompt: string): Promise<ImageGenerationResult> {
+        const safePrompt = this.prepareImagePrompt(prompt);
+
         if (this.provider === "google") {
-            return this.generateWithGoogle(prompt);
+            return this.generateWithGoogle(safePrompt);
         }
 
         if (this.provider === "huggingface") {
-            return this.generateWithHuggingFace(prompt);
+            return this.generateWithHuggingFace(safePrompt);
         }
 
-        return this.generateWithOpenAi(prompt);
+        return this.generateWithOpenAi(safePrompt);
+    }
+
+    private prepareImagePrompt(prompt: string) {
+        const sanitizedPrompt = UNSAFE_IMAGE_PROMPT_REPLACEMENTS.reduce(
+            (currentPrompt, [pattern, replacement]) =>
+                currentPrompt.replace(pattern, replacement),
+            prompt,
+        );
+
+        return `${sanitizedPrompt}${IMAGE_SAFETY_SUFFIX}`;
     }
 
     private async generateWithOpenAi(
@@ -145,7 +207,10 @@ export class ImageGenerationService {
             const response = await this.getGoogleLlm().invoke(
                 await this.buildGenerationInput(prompt),
             );
-            const result = await this.readProcessedImageFromResponse(response);
+            const result = await this.readProcessedImageFromResponse(
+                response,
+                this.shouldMirrorGoogleSpriteCells(prompt),
+            );
 
             if (result) {
                 return {
@@ -248,8 +313,8 @@ export class ImageGenerationService {
     }
 
     private readProvider(): ImageGenerationProvider {
-        const provider = process.env.IMAGE_GENERATION_PROVIDER?.trim()
-            .toLowerCase();
+        const provider =
+            process.env.IMAGE_GENERATION_PROVIDER?.trim().toLowerCase();
 
         if (provider === "google") return "google";
         if (provider === "huggingface" || provider === "hf") {
@@ -260,9 +325,8 @@ export class ImageGenerationService {
     }
 
     private readHuggingFaceProvider(): InferenceProviderOrPolicy {
-        return (
-            process.env.HF_IMAGE_PROVIDER?.trim() ?? "fal-ai"
-        ) as InferenceProviderOrPolicy;
+        return (process.env.HF_IMAGE_PROVIDER?.trim() ??
+            "fal-ai") as InferenceProviderOrPolicy;
     }
 
     private async buildGenerationInput(
@@ -328,8 +392,7 @@ export class ImageGenerationService {
     }
 
     private readOpenAiImageQuality(): OpenAiImageQuality {
-        const quality = process.env.OPENAI_IMAGE_QUALITY?.trim()
-            .toLowerCase();
+        const quality = process.env.OPENAI_IMAGE_QUALITY?.trim().toLowerCase();
 
         if (
             quality === "low" ||
@@ -389,12 +452,18 @@ export class ImageGenerationService {
         return "1:1";
     }
 
-    private async readProcessedImageFromResponse(response: unknown) {
+    private async readProcessedImageFromResponse(
+        response: unknown,
+        mirrorSpriteCellsHorizontally = false,
+    ) {
         const imageUrl = this.readImageFromResponse(response);
 
         if (!imageUrl) return undefined;
 
-        return this.removeModelSheetBaseColors(imageUrl);
+        return this.removeModelSheetBaseColors(
+            imageUrl,
+            mirrorSpriteCellsHorizontally,
+        );
     }
 
     private readImageFromResponse(response: unknown) {
@@ -445,39 +514,94 @@ export class ImageGenerationService {
         return `data:${mimeType};base64,${data}`;
     }
 
-    private async removeModelSheetBaseColors(imageUrl: string) {
+    private async removeModelSheetBaseColors(
+        imageUrl: string,
+        mirrorSpriteCellsHorizontally = false,
+    ) {
         const imageData = this.readImageDataUrl(imageUrl);
 
         if (!imageData) return imageUrl;
 
-        const image = sharp(imageData.data).ensureAlpha().resize(1024, 1024, {
-            fit: "fill",
-        });
-        const { data, info } = await image
-            .raw()
-            .toBuffer({ resolveWithObject: true });
+        const image = await Jimp.read(imageData.data);
 
-        for (let index = 0; index < data.length; index += info.channels) {
-            const red = data[index];
-            const green = data[index + 1];
-            const blue = data[index + 2];
+        image.resize({ w: 1024, h: 1024 });
 
-            if (this.isModelSheetBaseColor(red, green, blue)) {
-                data[index + 3] = 0;
-            }
+        if (mirrorSpriteCellsHorizontally) {
+            this.mirrorSpriteSheetCellsHorizontally(image, 5);
         }
 
-        const output = await sharp(data, {
-            raw: {
-                width: info.width,
-                height: info.height,
-                channels: info.channels,
+        image.scan(
+            0,
+            0,
+            image.bitmap.width,
+            image.bitmap.height,
+            (_x, _y, index) => {
+                const red = image.bitmap.data[index + 0];
+                const green = image.bitmap.data[index + 1];
+                const blue = image.bitmap.data[index + 2];
+                const isGreen =
+                    green > 100 && green > red * 1.4 && green > blue * 1.4;
+
+                if (isGreen) {
+                    //this.isModelSheetBaseColor(red, green, blue)) {
+                    image.bitmap.data[index + 3] = 0;
+                }
             },
-        })
-            .png()
-            .toBuffer();
+        );
+
+        const output = await image.getBuffer(JimpMime.png);
 
         return `data:image/png;base64,${output.toString("base64")}`;
+    }
+
+    private shouldMirrorGoogleSpriteCells(prompt: string) {
+        const normalizedPrompt = prompt.toLowerCase();
+
+        return (
+            normalizedPrompt.includes("face left") ||
+            normalizedPrompt.includes("facing left")
+        );
+    }
+
+    private mirrorSpriteSheetCellsHorizontally(
+        image: Awaited<ReturnType<typeof Jimp.read>>,
+        gridSize: number,
+    ) {
+        const { width, height, data } = image.bitmap;
+        const channelCount = 4;
+
+        for (let row = 0; row < gridSize; row += 1) {
+            const cellTop = Math.round((row * height) / gridSize);
+            const cellBottom = Math.round(((row + 1) * height) / gridSize);
+
+            for (let column = 0; column < gridSize; column += 1) {
+                const cellLeft = Math.round((column * width) / gridSize);
+                const cellRight = Math.round(((column + 1) * width) / gridSize);
+                const cellWidth = cellRight - cellLeft;
+                const halfCellWidth = Math.floor(cellWidth / 2);
+
+                for (let y = cellTop; y < cellBottom; y += 1) {
+                    for (let offsetX = 0; offsetX < halfCellWidth; offsetX += 1) {
+                        const leftIndex =
+                            (y * width + cellLeft + offsetX) * channelCount;
+                        const rightIndex =
+                            (y * width + cellRight - 1 - offsetX) *
+                            channelCount;
+
+                        for (
+                            let channel = 0;
+                            channel < channelCount;
+                            channel += 1
+                        ) {
+                            const leftValue = data[leftIndex + channel];
+                            data[leftIndex + channel] =
+                                data[rightIndex + channel];
+                            data[rightIndex + channel] = leftValue;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private readImageDataUrl(imageUrl: string) {
@@ -500,6 +624,7 @@ export class ImageGenerationService {
 
     private isModelSheetBaseColor(red: number, green: number, blue: number) {
         return (
+            this.isColorWithinTolerance(red, green, blue, 255, 255, 255, 10) ||
             this.isColorWithinTolerance(red, green, blue, 105, 255, 0, 48) ||
             this.isColorWithinTolerance(red, green, blue, 0, 203, 63, 48) ||
             this.isColorWithinTolerance(red, green, blue, 56, 231, 28, 48)

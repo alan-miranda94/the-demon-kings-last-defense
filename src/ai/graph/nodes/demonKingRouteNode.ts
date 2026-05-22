@@ -12,19 +12,41 @@ export function createDemonKingRouteNode() {
         state: DemonKingSpeechState,
         _runtime?: Runtime,
     ): Promise<Partial<DemonKingSpeechState>> => {
+        const resetPreviousOutput = {
+            invocationMessage: null,
+            characterInvocationResult: null,
+            skyInvocationResult: null,
+            obstacleInvocationResult: null,
+            message: null,
+            audioContent: null,
+            audioMimeType: null,
+            audioFormat: null,
+            error: null,
+        };
+
         if (state.eventType !== "action") {
-            return { nextRoute: "speech" };
+            return { ...resetPreviousOutput, nextRoute: "speech" };
+        }
+
+        if (state.invocationType === "character") {
+            return {
+                ...resetPreviousOutput,
+                nextRoute: "character-invocation",
+            };
         }
 
         if (state.invocationType === "obstacle") {
-            return { nextRoute: "obstacle-invocation" };
+            return {
+                ...resetPreviousOutput,
+                nextRoute: "obstacle-invocation",
+            };
         }
 
         if (state.invocationType === "sky") {
-            return { nextRoute: "sky-invocation" };
+            return { ...resetPreviousOutput, nextRoute: "sky-invocation" };
         }
 
-        return { nextRoute: "character-invocation" };
+        return { ...resetPreviousOutput, nextRoute: "speech" };
     };
 }
 

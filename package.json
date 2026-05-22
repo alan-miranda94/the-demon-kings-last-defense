@@ -22,9 +22,9 @@
         "typescript"
     ],
     "scripts": {
-        "dev": "node log.js dev & next dev -p 8080",
+        "dev": "node log.js dev & next dev -p 9090",
         "build": "node log.js build & next build",
-        "dev-nolog": "next dev -p 8080",
+        "dev-nolog": "next dev -p 9090",
         "build-nolog": "next build",
         "langgraph:serve": "npx @langchain/langgraph-cli dev"
     },
@@ -33,8 +33,10 @@
         "@huggingface/inference": "^4.13.15",
         "@langchain/core": "^1.1.46",
         "@langchain/google": "^0.1.11",
+        "@langchain/langgraph-checkpoint-postgres": "^1.0.1",
         "@langchain/openai": "^1.4.5",
         "@openrouter/sdk": "^0.12.35",
+        "jimp": "^1.6.1",
         "langchain": "^1.4.0",
         "next": "15.3.1",
         "pg": "^8.20.0",

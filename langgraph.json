@@ -1,6 +1,7 @@
 {
     "graphs": {
-        "the-demon-kings-last-defense": "./src/ai/graph/factory.ts:graph"
+        "the-demon-kings-last-defense": "./src/ai/graph/factory.ts:graph",
+        "hero-chat": "./src/ai/graph/factory.ts:heroChatGraph"
     },
     "env": ".env"
 }

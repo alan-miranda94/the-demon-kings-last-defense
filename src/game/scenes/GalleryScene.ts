@@ -234,17 +234,21 @@ export class GalleryScene extends Phaser.Scene {
         if (cachedInvocations) {
             this.invocations = cachedInvocations as GalleryInvocation[];
             this.renderRows();
-            return;
+        } else {
+            this.setStatus("Carregando invocacoes...");
         }
-
-        this.setStatus("Carregando invocacoes...");
 
         try {
             this.invocations = (await loadInvocationHistoryCache(
-                false,
+                true,
             )) as GalleryInvocation[];
             this.renderRows();
         } catch (error) {
+            if (cachedInvocations) {
+                this.setStatus("Nao foi possivel atualizar a galeria.");
+                return;
+            }
+
             this.invocations = [];
             this.renderRows(
                 error instanceof Error
@@ -810,4 +814,3 @@ export class GalleryScene extends Phaser.Scene {
         document.head.appendChild(style);
     }
 }
-

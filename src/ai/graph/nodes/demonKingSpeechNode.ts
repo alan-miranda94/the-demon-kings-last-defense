@@ -16,12 +16,15 @@ export type DemonKingSpeechState = DemonKingSpeechInput & {
         | "obstacle-invocation"
         | "sky-invocation"
         | "speech";
-    invocationMessage?: string;
-    characterInvocationResult?: CharacterInvocationBalance;
-    skyInvocationResult?: SkyInvocationBalance;
-    obstacleInvocationResult?: ObstacleInvocationBalance;
-    message?: string;
-    error?: string;
+    invocationMessage?: string | null;
+    characterInvocationResult?: CharacterInvocationBalance | null;
+    skyInvocationResult?: SkyInvocationBalance | null;
+    obstacleInvocationResult?: ObstacleInvocationBalance | null;
+    message?: string | null;
+    audioContent?: string | null;
+    audioMimeType?: string | null;
+    audioFormat?: "wav" | null;
+    error?: string | null;
 };
 
 export function createDemonKingSpeechNode(llmClient: OpenRouterService) {

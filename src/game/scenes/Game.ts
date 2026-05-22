@@ -94,6 +94,7 @@ const HERO_AUDIO_KEYS = {
     jump: "hero_audio_jump",
     running: "hero_audio_running",
 } as const;
+const CHAT_NOTIFICATION_AUDIO_KEY = "chat_notification_audio";
 type InvocationAudioFields = Partial<
     Record<InvocationAudioField, string | null>
 >;
@@ -105,6 +106,22 @@ type DemonKingSpeechEvent = {
     triggerPercent?: number;
     invocationCardId?: number;
 };
+
+type DemonHeroChatSpeaker = "lord" | "hero";
+
+type DemonHeroChatMessage = {
+    role: DemonHeroChatSpeaker;
+    content: string;
+};
+
+declare global {
+    interface Window {
+        responsiveVoice?: {
+            speak: (text: string, voice: string) => void;
+            cancel?: () => void;
+        };
+    }
+}
 
 type SkyInvocationResponse = {
     invocacao: Pick<InvocationAudioFields, "audio_invocation"> & {
@@ -259,15 +276,30 @@ export class Game extends Phaser.Scene {
     private manaText!: Phaser.GameObjects.Text;
     private manaRegenText!: Phaser.GameObjects.Text;
     private messageText!: Phaser.GameObjects.Text;
-    private demonKingChatText!: Phaser.GameObjects.Text;
+    private demonKingChatText?: Phaser.GameObjects.Text;
+    private pauseButton?: Phaser.GameObjects.Image;
+    private pauseButtonIcon?: Phaser.GameObjects.Text;
+    private pauseOverlay?: Phaser.GameObjects.Container;
+    private demonHeroChatPanel?: Phaser.GameObjects.DOMElement;
+    private demonHeroChatToggleButton?: Phaser.GameObjects.Image;
+    private demonHeroChatUnreadTween?: Phaser.Tweens.Tween;
+    private demonHeroChatInput?: HTMLInputElement;
+    private demonHeroChatMessagesElement?: HTMLElement;
+    private demonHeroChatMessages: DemonHeroChatMessage[] = [];
+    private demonHeroChatThreadId = "";
+    private isDemonHeroChatVisible = false;
+    private isHeroChatLoading = false;
     private creativeInvocationPanel!: Phaser.GameObjects.DOMElement;
     private creativeInvocationInput?: HTMLTextAreaElement;
     private gameLoadingContainer?: Phaser.GameObjects.Container;
     private heroRunningAudio?: Phaser.Sound.BaseSound;
+    private demonKingSpeechAudio?: HTMLAudioElement;
+    private isDemonKingSpeechAudioGenerating = false;
     private invocationAudioKeys = new Map<string, string>();
     private pendingInvocationAudioLoads = new Set<string>();
     private pendingInvocationArtworkLoads: PendingInvocationArtworkLoad[] = [];
     private isLoadingInvocationArtwork = false;
+    private isLeavingGameScene = false;
     private skyScrollX = 0;
     private groundScrollX = 0;
     private currentSceneryIndex = 0;
@@ -289,6 +321,7 @@ export class Game extends Phaser.Scene {
     private heroStrength = 56;
     private isHeroActing = false;
     private isWorldPausedForObstacle = false;
+    private isWorldPausedForHeroHit = false;
     private activeObstacles: ActiveObstacle[] = [];
     private activeCharacters: ActiveCharacter[] = [];
 
@@ -306,6 +339,7 @@ export class Game extends Phaser.Scene {
     private enemiesDefeated = 0;
     private manaSpentTotal = 0;
     private isGameOver = false;
+    private isGamePaused = false;
 
     constructor() {
         super("Game");
@@ -346,6 +380,11 @@ export class Game extends Phaser.Scene {
 
         this.load.image("demon_king_portrait", "assets/demon_king.png");
         this.load.image("demon_king_chat_balloon", "assets/ballon_chat.png");
+        this.load.image("demon_hero_chat_icon", "assets/chat-icon.png");
+        this.load.image(
+            "pause_square_button",
+            "assets/avoide_square_button.png",
+        );
         this.load.image("game_over_panel", "assets/painel.png");
         this.load.image("game_over_button", "assets/avoid_button.png");
         this.load.image("game_over_logo", "assets/game_logo.png");
@@ -376,11 +415,18 @@ export class Game extends Phaser.Scene {
             frameWidth: IMAGE_GENERATE_SIZE / 5,
             frameHeight: IMAGE_GENERATE_SIZE / 5,
         });
+        this.load.spritesheet("hero_hit", "assets/hero/hero_hite.png", {
+            frameWidth: IMAGE_GENERATE_SIZE / 5,
+            frameHeight: IMAGE_GENERATE_SIZE / 5,
+        });
         this.load.audio(HERO_AUDIO_KEYS.attack, ["assets/sounds/attack.mp3"]);
         this.load.audio(HERO_AUDIO_KEYS.hit, ["assets/sounds/death.mp3"]);
         this.load.audio(HERO_AUDIO_KEYS.jump, ["assets/sounds/sky_fall.mp3"]);
         this.load.audio(HERO_AUDIO_KEYS.running, [
             "assets/sounds/person_running.mp3",
+        ]);
+        this.load.audio(CHAT_NOTIFICATION_AUDIO_KEY, [
+            "assets/sounds/Notification_sound.mp3",
         ]);
         preloadBackgroundMusic(this);
     }
@@ -473,7 +519,16 @@ export class Game extends Phaser.Scene {
             this.heroHealthIncreaseIntervalSeconds;
         this.nextHeroStrengthIncreaseDistance = this.heroStrengthDistanceStep;
         this.isDemonKingSpeechLoading = false;
+        this.isDemonKingSpeechAudioGenerating = false;
         this.demonKingSpeechQueue = [];
+        this.isLeavingGameScene = false;
+        this.demonHeroChatMessages = [];
+        this.demonHeroChatThreadId = `hero-chat-${Date.now()}-${Phaser.Math.Between(
+            1000,
+            9999,
+        )}`;
+        this.isDemonHeroChatVisible = false;
+        this.isHeroChatLoading = false;
         this.invocationCards = [];
         this.activeObstacles = [];
         this.activeCharacters = [];
@@ -486,8 +541,10 @@ export class Game extends Phaser.Scene {
         this.wasManaFull = this.mana >= this.maxMana;
         this.wasManaEmpty = this.mana <= 0;
         this.isGameOver = false;
+        this.isGamePaused = false;
         this.isHeroActing = false;
         this.isWorldPausedForObstacle = false;
+        this.isWorldPausedForHeroHit = false;
         this.currentSceneryIndex = 0;
 
         this.registerHudFont();
@@ -497,6 +554,9 @@ export class Game extends Phaser.Scene {
         this.createHero();
         this.createDistanceHud();
         this.createExitButton();
+        this.createPauseButton();
+        this.createPauseOverlay();
+        this.createDemonHeroChatPanel();
         this.createCreativeInvocationPanel();
         void this.loadInvocationHistoryCards();
         this.tryPlayBackgroundMusic();
@@ -526,6 +586,7 @@ export class Game extends Phaser.Scene {
 
     update(_time: number, delta: number) {
         if (this.isGameOver) return;
+        if (this.isGamePaused) return;
 
         const dt = delta / 1000;
 
@@ -630,7 +691,7 @@ export class Game extends Phaser.Scene {
     }
 
     private updateParallax(delta: number) {
-        if (this.isWorldPausedForObstacle) return;
+        if (this.isWorldMovementPaused()) return;
 
         const dt = delta / 1000;
 
@@ -1552,6 +1613,9 @@ export class Game extends Phaser.Scene {
                 this.enemiesDefeated += 1;
                 character.healthBarContainer.destroy(true);
                 this.playInvocationAudio(invocation, "audio_dead");
+                void this.requestHeroTaunt(
+                    `o Heroi destruiu o personagem ${invocation.nome}`,
+                );
                 this.destroyCharacterWithDeathAnimation(character);
                 this.activeCharacters = this.activeCharacters.filter(
                     (activeCharacter) => activeCharacter !== character,
@@ -1670,6 +1734,8 @@ export class Game extends Phaser.Scene {
         field: InvocationAudioField,
         options: InvocationAudioOptions = {},
     ): Phaser.Sound.BaseSound | undefined {
+        if (this.isLeavingGameScene) return undefined;
+
         const audioUrl = this.normalizeInvocationAudioUrl(
             invocation[field] ?? DEFAULT_INVOCATION_AUDIO_BY_FIELD[field],
         );
@@ -1677,8 +1743,12 @@ export class Game extends Phaser.Scene {
 
         const key = this.getInvocationAudioKey(audioUrl);
         const playAudio = () => {
+            if (this.isLeavingGameScene) return undefined;
+
             try {
                 const start = () => {
+                    if (this.isLeavingGameScene) return undefined;
+
                     const sound = this.sound.add(key, {
                         loop: options.loop ?? false,
                         volume: options.volume ?? 0.95,
@@ -1714,7 +1784,7 @@ export class Game extends Phaser.Scene {
         this.load.once(Phaser.Loader.Events.COMPLETE, () => {
             this.pendingInvocationAudioLoads.delete(key);
 
-            if (this.cache.audio.exists(key)) {
+            if (!this.isLeavingGameScene && this.cache.audio.exists(key)) {
                 playAudio();
             }
         });
@@ -1752,6 +1822,14 @@ export class Game extends Phaser.Scene {
         this.createGridAnimation({
             textureKey: "hero_attack",
             animationKey: "hero_attack",
+            columns: 5,
+            rows: 5,
+            frameRate: 18,
+            repeat: 0,
+        });
+        this.createGridAnimation({
+            textureKey: "hero_hit",
+            animationKey: "hero_hit",
             columns: 5,
             rows: 5,
             frameRate: 18,
@@ -1842,7 +1920,7 @@ export class Game extends Phaser.Scene {
         const distanceCenterX = barX + barDisplayWidth / 2;
 
         this.add
-            .text(distanceCenterX, 15, "DISTÃ‚NCIA ATÃ‰ O CASTELO", {
+            .text(distanceCenterX, 15, "DISTÂNCIA ATÉ O CASTELO", {
                 fontFamily,
                 fontSize: `${16 * hudScale}px`,
                 color: "#f0d58a",
@@ -1877,7 +1955,7 @@ export class Game extends Phaser.Scene {
             .setOrigin(0.5);
 
         this.add
-            .text(distanceCenterX, 90, "TEMPO DE SOBREVIVÃŠNCIA", {
+            .text(distanceCenterX, 90, "TEMPO DE SOBREVIVÊNCIA", {
                 fontFamily,
                 fontSize: `${15 * hudScale}px`,
                 color: "#d99b43",
@@ -1928,12 +2006,29 @@ export class Game extends Phaser.Scene {
         this.updateDistanceHud();
     }
 
+    private getQuickControlsLayout() {
+        const invocationPanelWidth = 750;
+        const invocationPanelHeight = 166;
+        const invocationPanelX = GAME_WIDTH - invocationPanelWidth / 2 - 150;
+        const invocationPanelY = GAME_HEIGHT - invocationPanelHeight / 2 - 22;
+        const chatX = invocationPanelX + invocationPanelWidth / 2 + 32;
+        const controlsY = invocationPanelY + 4;
+
+        return {
+            chatX,
+            controlsY,
+            pauseX: chatX + 64,
+            exitX: chatX + 32,
+            exitY: controlsY + 58,
+        };
+    }
+
     private createExitButton() {
-        const buttonX = 82;
-        const buttonY = 161;
+        const { exitX: buttonX, exitY: buttonY } =
+            this.getQuickControlsLayout();
         const button = this.add
             .image(buttonX, buttonY, "game_over_button")
-            .setDisplaySize(118, 28)
+            .setDisplaySize(118, 36)
             .setInteractive({ useHandCursor: true })
             .setDepth(60);
         const label = this.add
@@ -1959,57 +2054,619 @@ export class Game extends Phaser.Scene {
         });
         button.on("pointerdown", () => {
             playButtonClickSound(this);
-            this.stopHeroRunningAudio();
-            this.creativeInvocationPanel?.destroy();
+            this.cleanupAudioAndQueuesBeforeLeavingScene();
             this.scene.start("InitialScene");
         });
+    }
+
+    private createPauseButton() {
+        const { pauseX: buttonX, controlsY: buttonY } =
+            this.getQuickControlsLayout();
+        const buttonDepth = 1002;
+
+        this.pauseButton = this.add
+            .image(buttonX, buttonY, "pause_square_button")
+            .setDisplaySize(48, 48)
+            .setInteractive({ useHandCursor: true })
+            .setDepth(buttonDepth);
+
+        this.pauseButtonIcon = this.add
+            .text(buttonX, buttonY - 1, "II", {
+                fontFamily: "AriW9500, monospace",
+                fontSize: "19px",
+                color: "#f7e5b6",
+                align: "center",
+                stroke: "#241106",
+                strokeThickness: 4,
+            })
+            .setOrigin(0.5)
+            .setDepth(buttonDepth + 1);
+
+        this.pauseButton.on("pointerover", () => {
+            playButtonHoverSound(this);
+            this.pauseButton?.setTint(0xc68cff);
+        });
+        this.pauseButton.on("pointerout", () => {
+            this.pauseButton?.clearTint();
+        });
+        this.pauseButton.on("pointerdown", () => {
+            playButtonClickSound(this);
+            this.setGamePaused(!this.isGamePaused);
+        });
+    }
+
+    private createPauseOverlay() {
+        const overlayDepth = 1000;
+        const width = this.scale.width || GAME_WIDTH;
+        const height = this.scale.height || GAME_HEIGHT;
+        const overlay = this.add
+            .rectangle(0, 0, width, height, 0x05030b, 0.86)
+            .setOrigin(0)
+            .setInteractive();
+        const panel = this.add
+            .image(GAME_WIDTH / 2, GAME_HEIGHT / 2, "game_over_panel")
+            .setDisplaySize(430, 250);
+        const title = this.add
+            .text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 56, "PAUSADO", {
+                fontFamily: "AriW9500, monospace",
+                fontSize: "36px",
+                color: "#f3b24d",
+                align: "center",
+                stroke: "#09050d",
+                strokeThickness: 7,
+            })
+            .setOrigin(0.5);
+        const hint = this.add
+            .text(
+                GAME_WIDTH / 2,
+                GAME_HEIGHT / 2 + 24,
+                "Clique no botão de play\npara continuar a defesa.",
+                {
+                    fontFamily: "AriW9500, monospace",
+                    fontSize: "17px",
+                    color: "#f4eadc",
+                    align: "center",
+                    lineSpacing: 8,
+                    stroke: "#09050d",
+                    strokeThickness: 4,
+                },
+            )
+            .setOrigin(0.5);
+
+        this.pauseOverlay = this.add
+            .container(0, 0, [overlay, panel, title, hint])
+            .setDepth(overlayDepth)
+            .setVisible(false);
+    }
+
+    private setGamePaused(isPaused: boolean) {
+        if (this.isGameOver) return;
+
+        this.isGamePaused = isPaused;
+        this.pauseOverlay?.setVisible(isPaused);
+        this.pauseButtonIcon?.setText(isPaused ? ">" : "II");
+
+        if (isPaused) {
+            this.stopHeroRunningAudio();
+            this.time.paused = true;
+            this.tweens.pauseAll();
+        } else {
+            this.time.paused = false;
+            this.tweens.resumeAll();
+        }
     }
 
     private createDemonKingHud(fontFamily: string) {
         const portraitX = 6;
         const portraitY = 16;
-        const portraitScale = 0.72;
-        const portraitWidth = 211 * portraitScale;
-        const balloonX = portraitX + portraitWidth + 12;
-        const balloonY = 37;
-        const balloonScale = 0.19;
-        const balloonWidth = 1224 * balloonScale;
+        const heroHudWidth = 350;
 
-        this.add
-            .image(portraitX, portraitY, "demon_king_portrait")
-            .setOrigin(0, 0)
-            .setScale(portraitScale);
+        // HUD antigo do Rei Demônio. Mantido comentado porque o espaço superior
+        // esquerdo agora mostra o status do Herói.
+        // const portraitScale = 0.72;
+        // const portraitWidth = 211 * portraitScale;
+        // const balloonX = portraitX + portraitWidth + 12;
+        // const balloonY = 37;
+        // const balloonScale = 0.19;
+        // const balloonWidth = 1224 * balloonScale;
+        //
+        // this.add
+        //     .image(portraitX, portraitY, "demon_king_portrait")
+        //     .setOrigin(0, 0)
+        //     .setScale(portraitScale);
+        //
+        // this.add.text(balloonX + 24, 20, "REI DEMÔNIO", {
+        //     fontFamily,
+        //     fontSize: "18px",
+        //     color: "#d99b43",
+        //     align: "left",
+        //     stroke: "#09050d",
+        //     strokeThickness: 3,
+        // });
 
-        this.add.text(balloonX + 24, 20, "REI DEMÃ”NIO", {
-            fontFamily,
-            fontSize: "18px",
-            color: "#d99b43",
-            align: "left",
-            stroke: "#09050d",
-            strokeThickness: 3,
+        // Balão antigo do Rei Demônio. Mantido comentado porque o chat LORD x HERÓI
+        // agora ocupa o papel de diálogo na lateral direita.
+        // this.add
+        //     .image(balloonX, balloonY, "demon_king_chat_balloon")
+        //     .setOrigin(0, 0)
+        //     .setScale(balloonScale);
+        //
+        // this.demonKingChatText = this.add.text(
+        //     balloonX + 30,
+        //     balloonY + 21,
+        //     "Ele está chegando...\nPreciso criar algo\npara detê-lo!",
+        //     {
+        //         fontFamily,
+        //         fontSize: "12px",
+        //         color: "#ffffff",
+        //         lineSpacing: 4,
+        //         wordWrap: { width: 166 },
+        //     },
+        // );
+
+        this.createHeroStatusHud(fontFamily, portraitX, portraitY);
+
+        return portraitX + heroHudWidth;
+    }
+
+    private createDemonHeroChatPanel() {
+        const panelWidth = 334;
+        const panelHeight = 446;
+        const panelX = GAME_WIDTH - panelWidth / 2;
+        const panelY = 354;
+
+        this.demonHeroChatPanel = this.add
+            .dom(panelX, panelY)
+            .createFromHTML(
+                `
+                <form class="demon-hero-chat">
+                    <style>
+                        .demon-hero-chat {
+                            box-sizing: border-box;
+                            width: ${panelWidth}px;
+                            height: ${panelHeight}px;
+                            padding: 72px 30px 34px;
+                            position: relative;
+                            border: 0;
+                            outline: 0;
+                            background-image: url("/assets/chat-painel.png");
+                            background-repeat: no-repeat;
+                            background-size: 100% 100%;
+                            background-color: transparent;
+                            color: #f2e4c2;
+                            font-family: AriW9500, monospace;
+                            pointer-events: auto;
+                        }
+
+                        .demon-hero-chat h2 {
+                            position: absolute;
+                            top: 40px;
+                            left: 34px;
+                            right: 34px;
+                            margin: 0;
+                            color: #f3b24d;
+                            font-size: 17px;
+                            line-height: 1;
+                            text-align: center;
+                            letter-spacing: 0;
+                            text-transform: uppercase;
+                            text-shadow: 0 3px 0 #09050d;
+                        }
+
+                        .demon-hero-chat .messages {
+                            box-sizing: border-box;
+                            height: 279px;
+                            overflow-y: auto;
+                            padding: 0 4px 6px;
+                            scrollbar-width: thin;
+                            scrollbar-color: #7b4a23 #080b0d;
+                        }
+
+                        .demon-hero-chat .message {
+                            display: grid;
+                            grid-template-columns: 46px 1fr;
+                            gap: 9px;
+                            min-height: 54px;
+                            padding: 6px 0;
+                            border-bottom: 1px solid rgba(146, 120, 87, 0.38);
+                        }
+
+                        .demon-hero-chat .message.lord {
+                            grid-template-columns: 1fr 46px;
+                            text-align: right;
+                        }
+
+                        .demon-hero-chat .message.lord .avatar {
+                            grid-column: 2;
+                            grid-row: 1;
+                        }
+
+                        .demon-hero-chat .message.lord .body {
+                            grid-column: 1;
+                            grid-row: 1;
+                        }
+
+                        .demon-hero-chat .avatar {
+                            width: 42px;
+                            height: 42px;
+                            object-fit: cover;
+                            border: 2px solid #6f3d16;
+                            outline: 1px solid #0d0908;
+                            background: #0b0d11;
+                        }
+
+                        .demon-hero-chat .speaker {
+                            margin-bottom: 4px;
+                            font-size: 13px;
+                            line-height: 1;
+                            text-transform: uppercase;
+                            text-shadow: 0 2px 0 #09050d;
+                        }
+
+                        .demon-hero-chat .message.lord .speaker {
+                            color: #b743f6;
+                        }
+
+                        .demon-hero-chat .message.hero .speaker {
+                            color: #d99b43;
+                        }
+
+                        .demon-hero-chat .content {
+                            color: #f4eadc;
+                            font-size: 12px;
+                            line-height: 1.35;
+                            word-break: break-word;
+                            text-shadow: 0 2px 0 #09050d;
+                        }
+
+                        .demon-hero-chat .composer {
+                            display: grid;
+                            grid-template-columns: 1fr 82px;
+                            gap: 8px;
+                            margin-top: 9px;
+                        }
+
+                        .demon-hero-chat input {
+                            box-sizing: border-box;
+                            min-width: 0;
+                            height: 40px;
+                            padding: 0 10px;
+                            border: 2px solid #5d432e;
+                            outline: 1px solid #14100d;
+                            background: rgba(10, 13, 14, 0.98);
+                            color: #f4eadc;
+                            font-family: AriW9500, monospace;
+                            font-size: 12px;
+                            line-height: 1;
+                        }
+
+                        .demon-hero-chat input::placeholder {
+                            color: #8d8981;
+                        }
+
+                        .demon-hero-chat button {
+                            height: 40px;
+                            border: 0;
+                            outline: 0;
+                            background-image: url("/assets/avoid_button.png");
+                            background-repeat: no-repeat;
+                            background-size: 100% 100%;
+                            background-color: transparent;
+                            color: #ffe6a6;
+                            font-family: AriW9500, monospace;
+                            font-size: 12px;
+                            line-height: 1;
+                            cursor: pointer;
+                            text-shadow: 0 2px 0 #1c1024;
+                        }
+
+                        .demon-hero-chat button:hover:not(:disabled) {
+                            filter: brightness(1.14);
+                        }
+
+                        .demon-hero-chat button:disabled {
+                            cursor: wait;
+                            filter: grayscale(0.35) brightness(0.78);
+                        }
+                    </style>
+                    <h2>CHAT LORD x HERÓI</h2>
+                    <div class="messages" id="demon-hero-chat-messages"></div>
+                    <div class="composer">
+                        <input
+                            id="demon-hero-chat-input"
+                            maxlength="180"
+                            placeholder="Digite uma ordem..."
+                            autocomplete="off"
+                        />
+                        <button type="submit">ENVIAR</button>
+                    </div>
+                </form>
+                `,
+            )
+            .setOrigin(0.5)
+            .setDepth(45)
+            .setVisible(this.isDemonHeroChatVisible);
+
+        const form = this.demonHeroChatPanel.node as HTMLFormElement;
+        this.demonHeroChatInput =
+            form.querySelector<HTMLInputElement>("#demon-hero-chat-input") ??
+            undefined;
+        this.demonHeroChatMessagesElement =
+            form.querySelector<HTMLElement>("#demon-hero-chat-messages") ??
+            undefined;
+        const submitButton = form.querySelector("button");
+
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            playButtonClickSound(this);
+            void this.handleDemonHeroChatSubmit();
+        });
+        submitButton?.addEventListener("mouseenter", () => {
+            playButtonHoverSound(this);
+        });
+        this.demonHeroChatInput?.addEventListener("focus", () => {
+            if (this.input.keyboard) {
+                this.input.keyboard.enabled = false;
+            }
+        });
+        this.demonHeroChatInput?.addEventListener("blur", () => {
+            if (this.input.keyboard) {
+                this.input.keyboard.enabled = true;
+            }
         });
 
-        this.add
-            .image(balloonX, balloonY, "demon_king_chat_balloon")
-            .setOrigin(0, 0)
-            .setScale(balloonScale);
+        this.createDemonHeroChatToggleButton();
+    }
 
-        this.demonKingChatText = this.add.text(
-            balloonX + 30,
-            balloonY + 21,
-            "Ele estÃ¡ chegando...\nPreciso criar algo\npara detÃª-lo!",
-            {
-                fontFamily,
-                fontSize: "12px",
-                color: "#ffffff",
-                lineSpacing: 4,
-                wordWrap: { width: 166 },
-            },
-        );
+    private createDemonHeroChatToggleButton() {
+        this.demonHeroChatToggleButton?.destroy();
 
-        this.createHeroStatusHud(fontFamily, portraitX, portraitY + 151);
+        const { chatX: iconX, controlsY: iconY } =
+            this.getQuickControlsLayout();
 
-        return balloonX + balloonWidth;
+        this.demonHeroChatToggleButton = this.add
+            .image(iconX, iconY, "demon_hero_chat_icon")
+            .setDisplaySize(64, 63)
+            .setDepth(46)
+            .setInteractive({ useHandCursor: true });
+
+        this.demonHeroChatToggleButton.on("pointerover", () => {
+            playButtonHoverSound(this);
+            this.demonHeroChatToggleButton?.setTint(0xf0c36a);
+        });
+        this.demonHeroChatToggleButton.on("pointerout", () => {
+            if (!this.demonHeroChatUnreadTween) {
+                this.demonHeroChatToggleButton?.clearTint();
+            }
+        });
+        this.demonHeroChatToggleButton.on("pointerdown", () => {
+            playButtonClickSound(this);
+            this.setDemonHeroChatVisible(!this.isDemonHeroChatVisible);
+        });
+    }
+
+    private setDemonHeroChatVisible(isVisible: boolean) {
+        this.isDemonHeroChatVisible = isVisible;
+        this.demonHeroChatPanel?.setVisible(isVisible);
+
+        if (isVisible) {
+            this.clearDemonHeroChatAttention();
+        }
+    }
+
+    private markDemonHeroChatAttention() {
+        if (
+            this.isDemonHeroChatVisible ||
+            !this.demonHeroChatToggleButton ||
+            this.demonHeroChatUnreadTween
+        ) {
+            return;
+        }
+
+        this.demonHeroChatToggleButton.setTint(0xf0c36a);
+        const baseScaleX = this.demonHeroChatToggleButton.scaleX;
+        const baseScaleY = this.demonHeroChatToggleButton.scaleY;
+        this.demonHeroChatUnreadTween = this.tweens.add({
+            targets: this.demonHeroChatToggleButton,
+            scaleX: baseScaleX * 1.13,
+            scaleY: baseScaleY * 1.13,
+            duration: 420,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut",
+        });
+    }
+
+    private clearDemonHeroChatAttention() {
+        this.demonHeroChatUnreadTween?.stop();
+        this.demonHeroChatUnreadTween = undefined;
+        this.demonHeroChatToggleButton?.setDisplaySize(64, 63);
+        this.demonHeroChatToggleButton?.clearTint();
+    }
+
+    private async handleDemonHeroChatSubmit() {
+        if (this.isHeroChatLoading) return;
+
+        const message = this.demonHeroChatInput?.value.trim() ?? "";
+        if (!message) return;
+
+        if (this.demonHeroChatInput) {
+            this.demonHeroChatInput.value = "";
+        }
+
+        this.appendDemonHeroChatMessage("lord", message);
+        this.setHeroChatLoading(true);
+
+        try {
+            const response = await fetch("/api/hero-chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    demonKingMessage: message,
+                    threadId: this.demonHeroChatThreadId,
+                    history: this.demonHeroChatMessages.slice(-10),
+                    distanceToCastle: this.distanceToCastle,
+                    maxDistanceToCastle: this.maxDistanceToCastle,
+                    survivalTimeSeconds: this.survivalTime,
+                    mana: this.mana,
+                    heroHealth: this.heroHealth,
+                    heroStrength: this.heroStrength,
+                }),
+            });
+
+            if (!response.ok) {
+                this.appendDemonHeroChatMessage(
+                    "hero",
+                    "Nao ouvi direito... mas continuo avancando.",
+                );
+                return;
+            }
+
+            const data = (await response.json()) as { message?: string };
+            this.appendDemonHeroChatMessage(
+                "hero",
+                data.message ?? "Ainda estou de pe. Continue tentando.",
+            );
+        } catch (error) {
+            console.error("Failed to request hero chat:", error);
+            this.appendDemonHeroChatMessage(
+                "hero",
+                "Sua sombra nao me cala. Eu sigo em frente.",
+            );
+        } finally {
+            this.setHeroChatLoading(false);
+        }
+    }
+
+    private async requestHeroTaunt(eventDescription: string) {
+        if (this.isHeroChatLoading) return;
+
+        this.setHeroChatLoading(true);
+
+        try {
+            const response = await fetch("/api/hero-chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    demonKingMessage:
+                        `O Rei Demonio acabou de falhar: ${eventDescription}. ` +
+                        "Responda como o Heroi zombando dessa derrota.",
+                    threadId: this.demonHeroChatThreadId,
+                    history: this.demonHeroChatMessages.slice(-10),
+                    distanceToCastle: this.distanceToCastle,
+                    maxDistanceToCastle: this.maxDistanceToCastle,
+                    survivalTimeSeconds: this.survivalTime,
+                    mana: this.mana,
+                    heroHealth: this.heroHealth,
+                    heroStrength: this.heroStrength,
+                }),
+            });
+
+            if (!response.ok) {
+                this.appendDemonHeroChatMessage(
+                    "hero",
+                    "Era esse o grande plano sombrio?",
+                );
+                return;
+            }
+
+            const data = (await response.json()) as { message?: string };
+            this.appendDemonHeroChatMessage(
+                "hero",
+                data.message ?? "Mais um truque quebrado no caminho.",
+            );
+        } catch (error) {
+            console.error("Failed to request hero taunt:", error);
+            this.appendDemonHeroChatMessage(
+                "hero",
+                "Seu exercito esta ficando menor, Rei Demonio.",
+            );
+        } finally {
+            this.setHeroChatLoading(false);
+        }
+    }
+
+    private appendDemonHeroChatMessage(
+        role: DemonHeroChatSpeaker,
+        content: string,
+    ) {
+        const message = { role, content };
+        this.demonHeroChatMessages.push(message);
+        this.demonHeroChatMessages = this.demonHeroChatMessages.slice(-20);
+        this.playChatNotificationSound();
+
+        if (!this.demonHeroChatMessagesElement) return;
+
+        const speaker = role === "lord" ? "LORD" : "HERÓI";
+        const avatar =
+            role === "lord"
+                ? "/assets/demon_king.png"
+                : "/assets/hero/hero_portrait.png";
+        const item = document.createElement("div");
+        item.className = `message ${role}`;
+        item.innerHTML = `
+            <img class="avatar" src="${avatar}" alt="${speaker}" />
+            <div class="body">
+                <div class="speaker">${speaker}:</div>
+                <div class="content">${this.escapeHtml(content)}</div>
+            </div>
+        `;
+
+        this.demonHeroChatMessagesElement.appendChild(item);
+
+        while (this.demonHeroChatMessagesElement.children.length > 20) {
+            this.demonHeroChatMessagesElement.firstElementChild?.remove();
+        }
+
+        this.demonHeroChatMessagesElement.scrollTop =
+            this.demonHeroChatMessagesElement.scrollHeight;
+
+        if (role === "hero") {
+            this.markDemonHeroChatAttention();
+        }
+    }
+
+    private playChatNotificationSound() {
+        try {
+            if (
+                this.isLeavingGameScene ||
+                this.sound.locked ||
+                !this.cache.audio.exists(CHAT_NOTIFICATION_AUDIO_KEY)
+            ) {
+                return;
+            }
+
+            this.sound.play(CHAT_NOTIFICATION_AUDIO_KEY, {
+                volume: 0.42,
+            });
+        } catch (error) {
+            console.warn("Chat notification sound failed:", error);
+        }
+    }
+
+    private setHeroChatLoading(isLoading: boolean) {
+        this.isHeroChatLoading = isLoading;
+
+        const form = this.demonHeroChatPanel?.node as HTMLFormElement | null;
+        const button = form?.querySelector<HTMLButtonElement>("button");
+
+        if (button) {
+            button.disabled = isLoading;
+            button.textContent = isLoading ? "..." : "ENVIAR";
+        }
+    }
+
+    private escapeHtml(value: string) {
+        return value
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 
     private createHeroStatusHud(fontFamily: string, x: number, y: number) {
@@ -2103,7 +2760,7 @@ export class Game extends Phaser.Scene {
         const centerX = x + barDisplayWidth / 2;
 
         this.add
-            .text(centerX, y - 31 * hudScale, "MANÃ DEMONÃACA", {
+            .text(centerX, y - 31 * hudScale, "MANA DEMONIACA", {
                 fontFamily,
                 fontSize: `${14 * hudScale}px`,
                 color: "#ffffff",
@@ -2394,7 +3051,7 @@ export class Game extends Phaser.Scene {
     }
 
     private updateHeroMovement(dt: number) {
-        if (this.isWorldPausedForObstacle) return;
+        if (this.isWorldMovementPaused()) return;
 
         const baseSpeed = 18;
         this.distanceToCastle = Math.max(
@@ -2533,11 +3190,14 @@ export class Game extends Phaser.Scene {
     }
 
     private queueDemonKingSpeech(event: DemonKingSpeechEvent) {
+        if (this.isLeavingGameScene) return;
+
         this.demonKingSpeechQueue.push(event);
         void this.processDemonKingSpeechQueue();
     }
 
     private async processDemonKingSpeechQueue() {
+        if (this.isLeavingGameScene) return;
         if (this.isDemonKingSpeechLoading) return;
 
         const event = this.demonKingSpeechQueue.shift();
@@ -2551,7 +3211,16 @@ export class Game extends Phaser.Scene {
     }
 
     private async requestDemonKingSpeech(event: DemonKingSpeechEvent) {
+        if (this.isLeavingGameScene) return;
+
         this.isDemonKingSpeechLoading = true;
+        const settings = getGameSettings();
+        const shouldGenerateDemonKingSpeechAudio =
+            settings.generateAudio &&
+            !this.isDemonKingSpeechAudioGenerating &&
+            !this.isDemonKingSpeechAudioActive();
+        this.isDemonKingSpeechAudioGenerating =
+            shouldGenerateDemonKingSpeechAudio;
 
         try {
             const response = await fetch("/api/demon-king/speech", {
@@ -2564,8 +3233,8 @@ export class Game extends Phaser.Scene {
                     eventDescription: event.eventDescription,
                     invocationType: event.invocationType,
                     imageGenerationProvider:
-                        getGameSettings().imageGenerationProvider,
-                    generateAudio: getGameSettings().generateAudio,
+                        settings.imageGenerationProvider,
+                    generateAudio: shouldGenerateDemonKingSpeechAudio,
                     distanceToCastle: this.distanceToCastle,
                     maxDistanceToCastle: this.maxDistanceToCastle,
                     survivalTimeSeconds: this.survivalTime,
@@ -2580,13 +3249,21 @@ export class Game extends Phaser.Scene {
                 return;
             }
 
+            if (this.isLeavingGameScene) return;
+
             const data = (await response.json()) as {
                 message?: string;
+                audioContent?: string;
+                audioMimeType?: string;
+                audioFormat?: string;
                 characterInvocation?: CharacterInvocationResponse;
                 skyInvocation?: SkyInvocationResponse;
                 obstacleInvocation?: ObstacleInvocationResponse;
             };
-            if (data.characterInvocation) {
+            const isInvocationAction =
+                event.eventType === "action" && Boolean(event.invocationType);
+
+            if (isInvocationAction && data.characterInvocation) {
                 if (event.invocationCardId) {
                     this.completeInvocationCard(
                         event.invocationCardId,
@@ -2597,7 +3274,7 @@ export class Game extends Phaser.Scene {
                 } else {
                     this.applyCharacterInvocation(data.characterInvocation);
                 }
-            } else if (data.skyInvocation) {
+            } else if (isInvocationAction && data.skyInvocation) {
                 if (event.invocationCardId) {
                     this.completeInvocationCard(
                         event.invocationCardId,
@@ -2609,7 +3286,7 @@ export class Game extends Phaser.Scene {
                 } else {
                     this.applySkyInvocation(data.skyInvocation);
                 }
-            } else if (data.obstacleInvocation) {
+            } else if (isInvocationAction && data.obstacleInvocation) {
                 if (event.invocationCardId) {
                     this.completeInvocationCard(
                         event.invocationCardId,
@@ -2631,19 +3308,20 @@ export class Game extends Phaser.Scene {
             }
             if (data.message) {
                 this.updateDemonKingChat(data.message);
-                //Mudar para elevem labs
-                if (window.responsiveVoice) {
-                    window.responsiveVoice.speak(
-                        data.message,
-                        "Brazilian Portuguese Male",
-                    );
-                }
+                this.playDemonKingSpeechAudio(
+                    data,
+                    shouldGenerateDemonKingSpeechAudio ||
+                        !settings.generateAudio,
+                );
             }
         } catch (error) {
             console.error("Failed to request demon king speech:", error);
             this.failInvocationCard(event.invocationCardId);
         } finally {
             this.isDemonKingSpeechLoading = false;
+            if (shouldGenerateDemonKingSpeechAudio) {
+                this.isDemonKingSpeechAudioGenerating = false;
+            }
         }
     }
 
@@ -2658,7 +3336,66 @@ export class Game extends Phaser.Scene {
     }
 
     public updateDemonKingChat(message: string) {
-        this.demonKingChatText.setText(message);
+        this.demonKingChatText?.setText(message);
+    }
+
+    private playDemonKingSpeechAudio(
+        data: {
+            message?: string;
+            audioContent?: string;
+            audioMimeType?: string;
+        },
+        allowFallback = true,
+    ) {
+        if (this.isLeavingGameScene) return;
+
+        if (!data.audioContent || !data.audioMimeType) {
+            if (allowFallback) {
+                this.playDemonKingSpeechFallback(data.message);
+            }
+            return;
+        }
+
+        this.stopDemonKingSpeechAudio();
+        const audio = new Audio(
+            `data:${data.audioMimeType};base64,${data.audioContent}`,
+        );
+        this.demonKingSpeechAudio = audio;
+
+        audio.play().catch((error) => {
+            console.warn("Generated demon king audio playback failed:", error);
+            if (allowFallback) {
+                this.playDemonKingSpeechFallback(data.message);
+            }
+        });
+    }
+
+    private isDemonKingSpeechAudioActive() {
+        const audio = this.demonKingSpeechAudio;
+
+        return Boolean(audio && !audio.paused && !audio.ended);
+    }
+
+    private stopDemonKingSpeechAudio() {
+        if (!this.demonKingSpeechAudio) return;
+
+        try {
+            this.demonKingSpeechAudio.pause();
+            this.demonKingSpeechAudio.src = "";
+            this.demonKingSpeechAudio.load();
+        } catch (error) {
+            console.warn("Demon king speech audio stop failed:", error);
+        } finally {
+            this.demonKingSpeechAudio = undefined;
+        }
+    }
+
+    private playDemonKingSpeechFallback(message?: string) {
+        if (this.isLeavingGameScene || !message || !window.responsiveVoice) {
+            return;
+        }
+
+        window.responsiveVoice.speak(message, "Brazilian Portuguese Male");
     }
 
     public generateDemonKingSpeechForAction(eventDescription: string) {
@@ -2709,8 +3446,11 @@ export class Game extends Phaser.Scene {
                     this.heroHealth - invocation.dano,
                 );
                 this.playHeroSound(HERO_AUDIO_KEYS.hit, 0.36);
+                this.playHeroHitReaction();
                 if (this.heroHealth <= 0) {
-                    this.resetHeroToStart(invocation.mensagemCombate);
+                    this.time.delayedCall(430, () => {
+                        this.resetHeroToStart(invocation.mensagemCombate);
+                    });
                 } else {
                     this.delayHero(
                         invocation.atraso * 18,
@@ -2845,7 +3585,7 @@ export class Game extends Phaser.Scene {
             if (!obstacle.marker.active) return false;
 
             if (obstacle.hasCollided) {
-                if (!this.isWorldPausedForObstacle) {
+                if (!this.isWorldMovementPaused()) {
                     obstacle.marker.x -= this.worldSpeed * dt;
                 }
 
@@ -2857,7 +3597,7 @@ export class Game extends Phaser.Scene {
                 return true;
             }
 
-            if (!this.isWorldPausedForObstacle && !obstacle.isSummoning) {
+            if (!this.isWorldMovementPaused() && !obstacle.isSummoning) {
                 obstacle.marker.x -= this.worldSpeed * dt;
             }
 
@@ -3025,6 +3765,9 @@ export class Game extends Phaser.Scene {
             this.cameras.main.shake(120, 0.004);
             this.enemiesDefeated += 1;
             this.playInvocationAudio(invocation, "audio_dead");
+            void this.requestHeroTaunt(
+                `o Heroi destruiu o obstaculo ${invocation.nome}`,
+            );
             marker.destroy();
             this.activeObstacles = this.activeObstacles.filter(
                 (activeObstacle) => activeObstacle !== obstacle,
@@ -3086,6 +3829,35 @@ export class Game extends Phaser.Scene {
         });
     }
 
+    private playHeroHitReaction(duration = 520) {
+        this.isHeroActing = true;
+        this.isWorldPausedForHeroHit = true;
+        this.hero.y = HERO_GROUND_Y;
+        this.stopHeroRunningAudio();
+
+        if (this.anims.exists("hero_hit")) {
+            this.hero.play("hero_hit", true);
+        }
+
+        this.time.delayedCall(duration, () => {
+            if (this.isGameOver) {
+                return;
+            }
+
+            this.isWorldPausedForHeroHit = false;
+
+            if (this.hero.anims.currentAnim?.key !== "hero_hit") {
+                return;
+            }
+
+            this.returnHeroToRun();
+        });
+    }
+
+    private isWorldMovementPaused() {
+        return this.isWorldPausedForObstacle || this.isWorldPausedForHeroHit;
+    }
+
     private returnHeroToRun() {
         this.isHeroActing = false;
         this.hero.y = HERO_GROUND_Y;
@@ -3097,7 +3869,7 @@ export class Game extends Phaser.Scene {
         if (
             this.isGameOver ||
             this.isHeroActing ||
-            this.isWorldPausedForObstacle
+            this.isWorldMovementPaused()
         ) {
             this.stopHeroRunningAudio();
             return;
@@ -3120,7 +3892,11 @@ export class Game extends Phaser.Scene {
         config: Phaser.Types.Sound.SoundConfig = {},
     ) {
         try {
-            if (this.sound.locked || !this.cache.audio.exists(key)) {
+            if (
+                this.isLeavingGameScene ||
+                this.sound.locked ||
+                !this.cache.audio.exists(key)
+            ) {
                 return undefined;
             }
 
@@ -3150,6 +3926,42 @@ export class Game extends Phaser.Scene {
         }
     }
 
+    private cleanupAudioAndQueuesBeforeLeavingScene() {
+        if (this.isLeavingGameScene) return;
+
+        this.isLeavingGameScene = true;
+        this.demonKingSpeechQueue = [];
+        this.isDemonKingSpeechLoading = false;
+        this.isDemonKingSpeechAudioGenerating = false;
+        this.pendingInvocationAudioLoads.clear();
+        this.time.paused = false;
+        this.tweens.resumeAll();
+        this.tweens.killAll();
+        this.time.removeAllEvents();
+        this.stopDemonKingSpeechAudio();
+        window.responsiveVoice?.cancel?.();
+        this.stopHeroRunningAudio();
+
+        this.activeCharacters.forEach((character) => {
+            this.stopInvocationAudio(character.runningAudio);
+            character.runningAudio = undefined;
+        });
+
+        try {
+            this.sound.stopAll();
+        } catch (error) {
+            console.warn("Game sound stop failed:", error);
+        }
+
+        this.pauseOverlay?.destroy(true);
+        this.pauseButton?.destroy();
+        this.pauseButtonIcon?.destroy();
+        this.demonHeroChatUnreadTween?.stop();
+        this.demonHeroChatPanel?.destroy();
+        this.demonHeroChatToggleButton?.destroy();
+        this.creativeInvocationPanel?.destroy();
+    }
+
     private resetHeroToStart(message?: string) {
         this.playHeroSound(HERO_AUDIO_KEYS.hit, 0.45);
         this.activeObstacles.forEach((obstacle) => obstacle.marker.destroy());
@@ -3161,6 +3973,7 @@ export class Game extends Phaser.Scene {
         this.activeObstacles = [];
         this.activeCharacters = [];
         this.isWorldPausedForObstacle = false;
+        this.isWorldPausedForHeroHit = false;
         this.isHeroActing = false;
         this.distanceToCastle = this.maxDistanceToCastle;
         this.heroHealth = this.maxHeroHealth;
@@ -3246,6 +4059,13 @@ export class Game extends Phaser.Scene {
 
     private showGameOverScreen() {
         this.stopHeroRunningAudio();
+        this.time.paused = false;
+        this.tweens.resumeAll();
+        this.demonHeroChatUnreadTween?.stop();
+        this.demonHeroChatPanel?.setVisible(false);
+        this.demonHeroChatToggleButton?.setVisible(false);
+        this.pauseButton?.setVisible(false);
+        this.pauseButtonIcon?.setVisible(false);
         this.creativeInvocationPanel?.setVisible(false);
         this.hero?.setVisible(false);
         this.invocationCards.forEach((card) =>
@@ -3377,14 +4197,20 @@ export class Game extends Phaser.Scene {
             GAME_WIDTH / 2 - 200,
             660,
             "TENTAR NOVAMENTE",
-            () => this.scene.restart(),
+            () => {
+                this.cleanupAudioAndQueuesBeforeLeavingScene();
+                this.scene.restart();
+            },
             overlayDepth + 2,
         );
         this.createGameOverButton(
             GAME_WIDTH / 2 + 200,
             660,
             "MENU PRINCIPAL",
-            () => this.scene.start("InitialScene"),
+            () => {
+                this.cleanupAudioAndQueuesBeforeLeavingScene();
+                this.scene.start("InitialScene");
+            },
             overlayDepth + 2,
         );
     }

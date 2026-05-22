@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Teste TTS - Lorde Demônio</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 720px;
+                margin: 40px auto;
+                padding: 20px;
+                background: #111;
+                color: #eee;
+            }
+
+            textarea,
+            input,
+            select,
+            button {
+                width: 100%;
+                box-sizing: border-box;
+                margin-top: 8px;
+                margin-bottom: 16px;
+                padding: 12px;
+                border-radius: 8px;
+                border: 1px solid #444;
+                background: #1d1d1d;
+                color: #fff;
+                font-size: 16px;
+            }
+
+            button {
+                cursor: pointer;
+                background: #7a1111;
+                border: none;
+                font-weight: bold;
+            }
+
+            button:hover {
+                background: #a01818;
+            }
+
+            audio {
+                width: 100%;
+                margin-top: 16px;
+            }
+
+            .status {
+                color: #bbb;
+                margin-top: 12px;
+                white-space: pre-wrap;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Teste TTS - Lorde Demônio</h1>
+
+        <label>URL da API</label>
+        <input id="apiUrl" value="http://localhost:9080/v1/audio/speech" />
+
+        <label>Modelo</label>
+        <input id="model" value="tts-1-hd" />
+
+        <label>Voz</label>
+        <input id="voice" value="demon_lord" />
+
+        <label>Texto</label>
+        <textarea id="text" rows="5">
+Meu servo... o herói se aproxima do último portão. Invoque uma criatura digna do meu domínio.</textarea
+        >
+
+        <label>Formato</label>
+        <select id="format">
+            <option value="mp3" selected>mp3</option>
+            <option value="wav">wav</option>
+        </select>
+
+        <button onclick="generateSpeech()">Gerar voz</button>
+
+        <audio id="audio" controls></audio>
+
+        <div id="status" class="status"></div>
+
+        <script>
+            async function generateSpeech() {
+                const apiUrl = document.getElementById("apiUrl").value;
+                const model = document.getElementById("model").value;
+                const voice = document.getElementById("voice").value;
+                const input = document.getElementById("text").value;
+                const response_format = document.getElementById("format").value;
+
+                const status = document.getElementById("status");
+                const audio = document.getElementById("audio");
+
+                status.textContent = "Gerando áudio...";
+                audio.removeAttribute("src");
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            model,
+                            voice,
+                            input,
+                            response_format,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(
+                            `Erro HTTP ${response.status}:\n${errorText}`,
+                        );
+                    }
+
+                    const blob = await response.blob();
+                    const audioUrl = URL.createObjectURL(blob);
+
+                    audio.src = audioUrl;
+                    audio.play();
+
+                    status.textContent = "Áudio gerado com sucesso.";
+                } catch (error) {
+                    status.textContent =
+                        "Erro ao gerar áudio:\n" + error.message;
+                }
+            }
+        </script>
+    </body>
+</html>

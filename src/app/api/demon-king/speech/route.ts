@@ -1,12 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod/v3";
-import { config } from "../../../../ai/config";
-import { OpenRouterService } from "../../../../ai/services/openrouterService";
-import { buildDemonKingSpeechGraph } from "../../../../ai/graph/graph";
+
 import { InvocationHistoryService } from "../../../../ai/services/invocationHistoryService";
 import type { CharacterInvocationBalance } from "../../../../ai/prompts/v1/characterInvocationBalance";
 import type { SkyInvocationBalance } from "../../../../ai/prompts/v1/skyInvocationBalance";
 import type { ObstacleInvocationBalance } from "../../../../ai/prompts/v1/obstacleInvocationBalance";
+import { buildGraph } from "@/ai/graph/factory";
 
 const RequestSchema = z.object({
     eventType: z.enum([
@@ -39,14 +38,19 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const llmClient = new OpenRouterService(config);
-        const graph = buildDemonKingSpeechGraph(llmClient);
-        const result = await graph.invoke(parsed.data);
+        const { graph } = await buildGraph();
+        // const graph = buildDemonKingSpeechGraph(llmClient);
+        const result = await graph.invoke(parsed.data, {
+            configurable: {
+                thread_id: "demon-king-session-id",
+            },
+        });
         const characterInvocation = result.characterInvocationResult as
             | CharacterInvocationBalance
             | undefined;
-        const skyInvocation =
-            result.skyInvocationResult as SkyInvocationBalance | undefined;
+        const skyInvocation = result.skyInvocationResult as
+            | SkyInvocationBalance
+            | undefined;
         const obstacleInvocation = result.obstacleInvocationResult as
             | ObstacleInvocationBalance
             | undefined;
@@ -71,6 +75,18 @@ export async function POST(request: NextRequest) {
             characterInvocation,
             skyInvocation,
             obstacleInvocation,
+            audioContent:
+                typeof result.audioContent === "string"
+                    ? result.audioContent
+                    : undefined,
+            audioMimeType:
+                typeof result.audioMimeType === "string"
+                    ? result.audioMimeType
+                    : undefined,
+            audioFormat:
+                typeof result.audioFormat === "string"
+                    ? result.audioFormat
+                    : undefined,
             message:
                 typeof result.message === "string"
                     ? result.message
