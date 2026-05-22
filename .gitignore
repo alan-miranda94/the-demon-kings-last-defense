@@ -46,3 +46,17 @@ next-env.d.ts
 docker/.env
 .env.local
 *.env
+
+docker/voices/alloy.wav
+docker/voices/echo.wav
+docker/voices/fable.wav
+docker/voices/nova.wav
+docker/voices/onyx.wav
+docker/voices/shimmer.wav
+docker/voices/tts
+docker/voices/hub
+docker/voices/en_GB-northern_english_male-medium.onnx
+docker/voices/en_GB-northern_english_male-medium.onnx.json
+docker/voices/en_US-libritts_r-medium.onnx 
+docker/voices/en_US-libritts_r-medium.onnx.json
+
