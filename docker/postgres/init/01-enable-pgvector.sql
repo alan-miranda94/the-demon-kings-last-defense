@@ -1,0 +1,7 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS invocation_history (
+    id BIGSERIAL PRIMARY KEY,
+    invocation JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -1,0 +1,6 @@
+{
+    "graphs": {
+        "the-demon-kings-last-defense": "./src/ai/graph/factory.ts:graph"
+    },
+    "env": ".env"
+}

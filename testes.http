@@ -1,0 +1,40 @@
+@appUrl = http://localhost:8080
+@openRouterUrl = https://openrouter.ai/api/v1
+@openRouterApiKey = {{$dotenv OPENROUTER_API_KEY}}
+
+### Testar fluxo do jogo: obstaculo com imagem via LangGraph
+POST {{appUrl}}/api/demon-king/speech
+Content-Type: application/json
+
+{
+  "eventType": "action",
+  "eventDescription": "um bloco de pedra gigante saindo do chao",
+  "invocationType": "obstacle",
+  "distanceToCastle": 8500,
+  "maxDistanceToCastle": 10000,
+  "survivalTimeSeconds": 45,
+  "mana": 180,
+  "maxMana": 250
+}
+
+### Testar Gemini 3.1 Flash Image Preview direto no OpenRouter
+POST {{openRouterUrl}}/chat/completions
+Authorization: Bearer {{openRouterApiKey}}
+Content-Type: application/json
+X-Title: The Demon King's Last Defense
+
+{
+  "model": "google/gemini-3.1-flash-image-preview",
+  "messages": [
+    {
+      "role": "user",
+      "content": "5x5 sprite sheet grid for a classic 16-bit platformer pixel art obstacle. A stone block rises from the ground in frames 1 through 10, then idles in frames 11 through 25. Transparent background, no text, no UI."
+    }
+  ],
+  "modalities": ["image", "text"],
+  "image_config": {
+    "aspect_ratio": "1:1",
+    "image_size": "1K"
+  },
+  "stream": false
+}

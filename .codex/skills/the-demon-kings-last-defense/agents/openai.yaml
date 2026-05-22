@@ -1,0 +1,4 @@
+interface:
+  display_name: "Demon King Project"
+  short_description: "Project map and coding guardrails"
+  default_prompt: "Use $the-demon-kings-last-defense to work on this project without losing its architecture, commands, and conventions."

@@ -1,0 +1,86 @@
+name: the-demon-kings-last-defense
+
+services:
+  postgres:
+    container_name: the-demon-kings-last-defense-postgres
+    restart: always
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: the_demon_kings_last_defense
+    volumes:
+      - project_postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U postgres -d the_demon_kings_last_defense"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  diffusion-api:
+    build: .
+    container_name: diffusion-api
+    ports:
+      - "8091:8091"
+    volumes:
+      - ./output:/app/output
+      - ./models:/app/models
+      - ./cache:/root/.cache/huggingface
+    environment:
+      - MODEL_ID=/app/models/SD_PixelArt_SpriteSheet_Generator
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # SE TIVER UM BOM PC COM MUITA VRAM DA PRA USAR
+  # comfy-api:
+  #   build: .
+  #   container_name: comfy-api
+  #   ports:
+  #     - "8000:8000"
+  #     - "8188:8188"
+  #   volumes:
+  #     - ./models:/data/models
+  #     - ./outputs:/data/output
+  #     - ./input:/data/input
+  #   environment:
+  #     # URL do modelo/checkpoint que será baixado no primeiro /generate.
+  #     # Use um checkpoint SD 1.5 .safetensors para 4 GB de VRAM.
+  #     - CHECKPOINT_URL=${CHECKPOINT_URL}
+  #     - CHECKPOINT_FILENAME=${CHECKPOINT_FILENAME:-model.safetensors}
+
+  #     # Opcional para Hugging Face privado/gated.
+  #     - HF_TOKEN=${HF_TOKEN:-}
+
+  #     # Configuração ComfyUI
+  #     - COMFY_HOST=127.0.0.1
+  #     - COMFY_PORT=8188
+
+  #     # Modo 4 GB VRAM
+  #     - COMFY_ARGS=--listen 0.0.0.0 --port 8188 --lowvram --cpu-vae --disable-auto-launch --output-directory /data/output --input-directory /data/input
+
+  #     # API wrapper
+  #     - API_PORT=8000
+
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+
+  #   restart: unless-stopped
+
+volumes:
+  project_postgres_data:

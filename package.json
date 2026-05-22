@@ -1,42 +1,53 @@
 {
-  "name": "template-nextjs",
-  "version": "1.2.0",
-  "description": "A Phaser 3 Next.js project template that demonstrates Next.js with React communication and uses Vite for bundling.",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/phaserjs/template-nextjs.git"
-  },
-  "author": "Phaser Studio <support@phaser.io> (https://phaser.io/)",
-  "license": "MIT",
-  "licenseUrl": "http://www.opensource.org/licenses/mit-license.php",
-  "bugs": {
-    "url": "https://github.com/phaserjs/template-nextjs/issues"
-  },
-  "homepage": "https://github.com/phaserjs/template-nextjs#readme",
-  "keywords": [
-    "phaser",
-    "phaser3",
-    "next",
-    "nextjs",
-    "vite",
-    "typescript"
-  ],
-  "scripts": {
-    "dev": "node log.js dev & next dev -p 8080",
-    "build": "node log.js build & next build",
-    "dev-nolog": "next dev -p 8080",
-    "build-nolog": "next build"
-  },
-  "dependencies": {
-    "next": "15.3.1",
-    "phaser": "4.0.0",
-    "react": "19.0.0",
-    "react-dom": "19.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "typescript": "^5"
-  }
+    "name": "the-demon-kings-last-defense",
+    "version": "1.2.0",
+    "description": "A Phaser 3 Next.js project template that demonstrates Next.js with React communication and uses Vite for bundling.",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/phaserjs/template-nextjs.git"
+    },
+    "author": "Phaser Studio <support@phaser.io> (https://phaser.io/)",
+    "license": "MIT",
+    "licenseUrl": "http://www.opensource.org/licenses/mit-license.php",
+    "bugs": {
+        "url": "https://github.com/phaserjs/template-nextjs/issues"
+    },
+    "homepage": "https://github.com/phaserjs/template-nextjs#readme",
+    "keywords": [
+        "phaser",
+        "phaser3",
+        "next",
+        "nextjs",
+        "vite",
+        "typescript"
+    ],
+    "scripts": {
+        "dev": "node log.js dev & next dev -p 8080",
+        "build": "node log.js build & next build",
+        "dev-nolog": "next dev -p 8080",
+        "build-nolog": "next build",
+        "langgraph:serve": "npx @langchain/langgraph-cli dev"
+    },
+    "dependencies": {
+        "@elevenlabs/elevenlabs-js": "^2.49.1",
+        "@huggingface/inference": "^4.13.15",
+        "@langchain/core": "^1.1.46",
+        "@langchain/google": "^0.1.11",
+        "@langchain/openai": "^1.4.5",
+        "@openrouter/sdk": "^0.12.35",
+        "langchain": "^1.4.0",
+        "next": "15.3.1",
+        "pg": "^8.20.0",
+        "phaser": "4.0.0",
+        "react": "19.0.0",
+        "react-dom": "19.0.0",
+        "sharp": "^0.34.1"
+    },
+    "devDependencies": {
+        "@types/node": "^20",
+        "@types/pg": "^8.20.0",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "typescript": "^5"
+    }
 }

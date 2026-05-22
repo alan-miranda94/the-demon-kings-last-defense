@@ -1,0 +1,155 @@
+{
+    "start_invocation": [
+        {
+            "ok": true,
+            "inputOriginal": "erick wendell programer. um programador especialista in javascript",
+            "invocacao": {
+                "id": "inv_erick_wendell_js",
+                "nome": "Erick Wendell, o Mestre do JavaScript",
+                "tipo": "personagem",
+                "papel": "BOSS",
+                "tamanho": "medio",
+                "vida": 750,
+                "dano": 180,
+                "atraso": 1.5,
+                "custoMana": 90,
+                "tempoAproximacao": 1.8,
+                "descricaoVisual": "Pixel art 16-bit de estilo dark fantasy. Um programador de cabelos longos e escuros, barba cheia e óculos, vestindo uma camisa roxa escura. Ele se move envolto em fumaça demoníaca roxa e ataca lançando códigos e magias a partir de sua caneca de café, sempre encarando os inimigos à esquerda.",
+                "mensagemCombate": "Erick Wendell foi conjurado das sombras do ecossistema Node.js! Prepare-se para o callback de dano!",
+                "mensagemAcaoHeroi": "Erick aponta sua caneca e dispara um feixe de puro código assíncrono destrutivo!",
+                "imageStatus": "ready",
+                "imageUrl": "./invocations/erick_wendell_spritesheet.png",
+                "placeholderSprite": "character_chaos",
+                "audio_attack": "./invocation/vai_lasca_tudo.mp3",
+                "audio_invocation": "./invocation/bora_pra_demo.mp3",
+                "audio_running": "./sounds/person_running.mp3",
+                "audio_dead": "./invocation/ferrou_mano.mp3"
+            },
+            "balanceamento": {
+                "foiNerfado": true,
+                "motivo": "O dano crítico de estouro de pilha (Stack Overflow) estava quebrando o meta do jogo na primeira rodada.",
+                "nivelPoder": "forte"
+            }
+        },
+        {
+            "ok": true,
+            "invocacao": {
+                "id": "zumbi_fogo_infernal",
+                "dano": 55,
+                "nome": "Zumbi de Fogo Infernal",
+                "tipo": "personagem",
+                "vida": 350,
+                "papel": "guerreiro",
+                "atraso": 1.5,
+                "tamanho": "medio",
+                "imageUrl": "./invocations/zumbi_fogo_infernal.png",
+                "custoMana": 50,
+                "imageStatus": "ready",
+                "descricaoVisual": "Zumbi ressecado e carbonizado envolto em chamas vivas de tons alaranjados, com uma aura de energia purpúrea ao redor de seus ataques. Ele corre e ataca ferozmente em direção à esquerda, deixando uma trilha de fumaça escura, com olhos vermelhos brilhantes e garras estendidas.",
+                "mensagemCombate": "O Zumbi de Fogo Infernal avança ferozmente da direita para a esquerda, realizando um ataque flamejante contra o herói!",
+                "tempoAproximacao": 1.2,
+                "mensagemAcaoHeroi": "O herói ergue sua guarda contra a investida ardente do Zumbi de Fogo Infernal!",
+                "placeholderSprite": "spritesheet_5x5_zombie"
+            },
+            "balanceamento": {
+                "motivo": null,
+                "foiNerfado": false,
+                "nivelPoder": "medio"
+            },
+            "inputOriginal": "zumbi em chamas"
+        },
+
+        {
+            "ok": true,
+            "inputOriginal": "erick wendell programador javascript",
+            "invocacao": {
+                "id": "estatua_mestre_js_002",
+                "nome": "Estátua do Mestre JavaScript",
+                "tipo": "obstaculo",
+                "comportamentoHeroi": {
+                    "acao": "desviar_ou_bloquear",
+                    "danoAoFalhar": 120,
+                    "efeitoStatus": "atordoamento_codigo"
+                },
+                "categoria": "perigo_magico",
+                "tamanho": "medio",
+                "vida": 450,
+                "atraso": 2.0,
+                "custoMana": 65,
+                "tempoAproximacao": 1.4,
+                "descricaoVisual": "Uma estátua de pedra detalhada de um programador de cabelos longos e óculos, baseada no Erick Wendell. Ela emerge do chão através de fendas de energia roxa e fumaça. Quando completamente invocada, ela pulsa com engrenagens douradas mágicas, partículas binárias flutuantes e luzes nos óculos, travando o avanço do herói com pura energia de código.",
+                "mensagemCombate": "A Estátua do Mestre JavaScript surge do solo, emitindo uma barreira de erros de sintaxe e loops infinitos!",
+                "mensagemAcaoHeroi": "O herói tenta refatorar seus movimentos e desviar da área de compilação da estátua!",
+                "imageStatus": "ready",
+                "imageUrl": "./invocations/erick_wendell_estatua.png.png",
+                "audio_invocation": "./invocation/memoria_spaco.mp3",
+                "audio_attack": "",
+                "audio_running": "",
+                "audio_dead": "./invocation/ferrou_mano.mp3",
+                "placeholderSprite": "obstacle_magic"
+            },
+            "balanceamento": {
+                "foiNerfado": false,
+                "motivo": null,
+                "nivelPoder": "medio"
+            }
+        },
+        {
+            "ok": true,
+            "inputOriginal": "Convocação do meteoro cibernético de IA aplicada com rastro de energia sombria e relâmpagos roxos.",
+            "invocacao": {
+                "id": "inv_ia_08eb9de",
+                "nome": "Impacto da IA Corrompida",
+                "tipo": "ataque_celeste",
+                "categoriaObjeto": "monolito_ancestral",
+                "tamanho": "grande",
+                "peso": "pesado",
+                "elemento": "sombra",
+                "dano": 750,
+                "atraso": 1.5,
+                "areaImpacto": 180,
+                "custoMana": 85,
+                "cooldown": 12,
+                "tempoQueda": 0.8,
+                "efeitos": ["atordoamento", "corrosao_sombria"],
+                "descricaoVisual": "O icônico monólito de IA cai diagonalmente do céu envolto em chamas roxas de matéria escura e faíscas elétricas cianas, deixando um rastro pixelizado de destruição.",
+                "mensagemCombate": "O céu se rasga e o Impacto da IA Corrompida esmaga os inimigos na área!",
+                "imageStatus": "ready",
+                "imageUrl": "./invocations/ia_applied_fall.png.png",
+                "placeholderSprite": "falling_meteor"
+            },
+            "balanceamento": {
+                "foiNerfado": true,
+                "motivo": "A área de impacto estava cobrindo a tela inteira e o escalonamento de dano sombrio quebrava o balanceamento das builds de mago nas dungeons de tier alto.",
+                "nivelPoder": "muito_forte"
+            }
+        },
+        {
+            "ok": true,
+            "inputOriginal": "stive hocks",
+            "invocacao": {
+                "id": "stive_hokis_sombrio",
+                "nome": "Stive Hokis, o Ceifador das Sombras",
+                "tipo": "personagem",
+                "papel": "assassino",
+                "tamanho": "medio",
+                "vida": 420,
+                "dano": 145,
+                "atraso": 1.2,
+                "custoMana": 75,
+                "tempoAproximacao": 0.8,
+                "descricaoVisual": "Um guerreiro sombrio e ágil de longos cabelos escuros e vestes rasgadas com uma capa esvoaçante. Ele surge de uma densa fumaça de energia roxa demoníaca empunhando uma foice curta ou cajado laminado. O personagem avança correndo velozmente da direita para a esquerda, desferindo golpes rápidos com rastros de energia purpúrea cortante antes de colapsar e sumir nas sombras.",
+                "mensagemCombate": "Stive Hokis surge instantaneamente das sombras e executa uma sequência rápida de cortes com sua foice!",
+                "mensagemAcaoHeroi": "O herói tenta antecipar o avanço veloz e esquivar do corte preciso de Stive Hokis!",
+                "imageStatus": "ready",
+                "imageUrl": "./invocations/stive_hokis_sombrio.png",
+                "placeholderSprite": "character_assassin"
+            },
+            "balanceamento": {
+                "foiNerfado": false,
+                "motivo": null,
+                "nivelPoder": "forte"
+            }
+        }
+    ]
+}
