@@ -1,5 +1,7 @@
 # The Demon King's Last Defense
 
+![Gameplay de The Demon King's Last Defense](public/assets/screem_record.gif)
+
 ## Visao Geral
 
 The Demon King's Last Defense e um jogo em Next.js, React e Phaser onde o jogador controla o Rei Demonio tentando impedir o avanco do Heroi ate o castelo. O jogo usa LangGraph/LangChain para gerar falas, invocacoes balanceadas, imagens, audio e respostas do chat entre o Rei Demonio e o Heroi.
